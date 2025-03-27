@@ -11,6 +11,7 @@ class NodeType(enum.IntEnum):
     INFLOW = 4
     OUTFLOW = 5
     WALL_BOUNDARY = 6
+    HIGH_STRESS=7
     SIZE = 9
 
 

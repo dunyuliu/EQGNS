@@ -40,7 +40,8 @@ FLAGS = flags.FLAGS
 INPUT_SEQUENCE_LENGTH = 1
 noise_std = 2e-2
 node_type_embedding_size = 9
-dt = 0.01
+#dt = 0.01
+dt=0.041666666666667
 lr_init = 1e-4
 lr_decay_rate = 0.1
 lr_decay_steps = 5e6
@@ -78,7 +79,7 @@ def predict(simulator: learned_simulator.MeshSimulator,
         for i, features in enumerate(ds):
             nsteps = len(features[0]) - INPUT_SEQUENCE_LENGTH
             prediction_data = rollout(simulator, features, nsteps, device)
-            print(f"Rollout for example{i}: loss = {prediction_data['mean_loss']}")
+            print(f"Rollout for example{i}: loss = {prediction_data['mean_loss']} {prediction_data['mean_acc_loss']}")
 
             # Save rollout in testing
             if FLAGS.mode == 'rollout':
@@ -87,7 +88,7 @@ def predict(simulator: learned_simulator.MeshSimulator,
                 with open(filename, 'wb') as f:
                     pickle.dump(prediction_data, f)
 
-    print(f"Mean loss on rollout prediction: {prediction_data['mean_loss']}")
+    print(f"Mean loss on rollout prediction: {prediction_data['mean_loss']} {prediction_data['mean_acc_loss']}")
 
 def rollout(simulator: learned_simulator.MeshSimulator,
             features,
@@ -105,6 +106,8 @@ def rollout(simulator: learned_simulator.MeshSimulator,
 
     current_velocities = initial_velocities.squeeze().to(device)
     predictions = []
+    acc_loss = []
+
     mask = None
 
     for step in tqdm(range(nsteps), total=nsteps):
@@ -132,24 +135,44 @@ def rollout(simulator: learned_simulator.MeshSimulator,
             node_type=graph.x[:, 0],
             edge_index=graph.edge_index,
             edge_features=graph.edge_attr)
+        
+        # Get velocity noise
+        velocity_noise = get_velocity_noise(graph, noise_std=0.0, device=device)
+
+        # Predict dynamics
+        pred_acc, target_acc = simulator.predict_acceleration(
+            current_velocities=graph.x[:,1:3],
+            node_type=graph.x[:,0],
+            edge_index=graph.edge_index,
+            edge_features=graph.edge_attr,
+            target_velocities=graph.y,
+            velocity_noise=velocity_noise)
 
         # Apply mask.
         if mask is None:  # only compute mask for the first timestep, since it will be the same for the later timesteps
-            mask = torch.logical_or(current_node_type == NodeType.NORMAL, current_node_type == NodeType.OUTFLOW)
+            mask0 = torch.logical_or(current_node_type == NodeType.NORMAL, \
+					current_node_type == NodeType.HIGH_STRESS)
+            mask = mask0
+            mask0 = mask0.squeeze(1)
             mask = torch.logical_not(mask)
             mask = mask.squeeze(1)
         # Maintain previous velocity if node_type is not (Normal or Outflow).
         # i.e., only update normal or outflow nodes.
         predicted_next_velocity[mask] = next_ground_truth_velocities[mask]
         predictions.append(predicted_next_velocity)
-
+        
+        errors = ((pred_acc-target_acc)**2)[mask0]
+        print(step, errors, torch.mean(errors))
+        acc_loss.append(torch.mean(errors))
         # Update current position for the next prediction
         current_velocities = predicted_next_velocity.to(device)
 
     # Prediction with shape (time, nnodes, dim)
     predictions = torch.stack(predictions)
-
     loss = (predictions - ground_truth_velocities.to(device)) ** 2
+    
+    acc_loss = torch.stack(acc_loss) 
+    loss1 = acc_loss.mean()
 
     output_dict = {
         'initial_velocities': initial_velocities.cpu().numpy(),
@@ -157,7 +180,8 @@ def rollout(simulator: learned_simulator.MeshSimulator,
         'ground_truth_rollout': ground_truth_velocities.cpu().numpy(),
         'node_coords': node_coords.cpu().numpy(),
         'node_types': node_types.cpu().numpy(),
-        'mean_loss': loss.mean().cpu().numpy()
+        'mean_loss': loss.mean().cpu().numpy(),
+        'mean_acc_loss':loss1.cpu().numpy()
     }
 
     return output_dict
@@ -243,9 +267,8 @@ def train(simulator):
                     edge_features=edge_features,
                     target_velocities=target_velocities,
                     velocity_noise=velocity_noise)
-
-                # Compute loss
-                mask = torch.logical_or(node_types == NodeType.NORMAL, node_types == NodeType.OUTFLOW)
+                mask = torch.logical_or(node_types == NodeType.NORMAL, \
+					node_types == NodeType.HIGH_STRESS)
                 errors = ((pred_acc - target_acc)**2)[mask]  # only compute errors if node_types is NORMAL or OUTFLOW
                 loss = torch.mean(errors)
 
@@ -261,6 +284,8 @@ def train(simulator):
 
                 if step % loss_report_step == 0:
                     print(f"Training step: {step}/{FLAGS.ntraining_steps}. Loss: {loss}.")
+                    with open(model_path + 'loss_log.txt', 'a') as f:
+                        f.write(f"{step} {loss}\n")
 
                 # Save model state
                 if step % FLAGS.nsave_steps == 0:

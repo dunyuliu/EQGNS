@@ -89,7 +89,9 @@ class MeshSimulator(nn.Module):
 
         # embed integer node_type to onehot vector
         node_type = torch.squeeze(node_type.long())
+#        print(node_type, node_type.shape)
         node_type_onehot = torch.nn.functional.one_hot(node_type, self._node_type_embedding_size)
+#        print(node_type_onehot, node_type_onehot.shape)
         node_features.append(node_type_onehot)
 
         node_features = torch.cat(node_features, dim=1)

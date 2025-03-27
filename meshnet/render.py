@@ -37,13 +37,16 @@ def render_gif_animation():
     triang = tri.Triangulation(result["node_coords"][0][:, 0], result["node_coords"][0][:, 1])
 
     # color
+    ti = np.int32(n_timesteps/3)
     vmin = np.concatenate(
-        (result["predicted_rollout"][0][:, 0], result["ground_truth_rollout"][0][:, 0])).min()
+        (result["predicted_rollout"][ti][:, 0], result["ground_truth_rollout"][ti][:, 0])).min()
     vmax = np.concatenate(
-        (result["predicted_rollout"][0][:, 0], result["ground_truth_rollout"][0][:, 0])).max()
+        (result["predicted_rollout"][ti][:, 0], result["ground_truth_rollout"][ti][:, 0])).max()
 
+    #vmin = 0.0
+    #vmax = 10.
     # Init figures
-    fig = plt.figure(figsize=(9.75, 3))
+    fig = plt.figure(figsize=(6, 6.5))
 
     def animate(i):
         print(f"Render step {i}/{n_timesteps}")
