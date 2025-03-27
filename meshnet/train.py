@@ -40,12 +40,11 @@ FLAGS = flags.FLAGS
 INPUT_SEQUENCE_LENGTH = 1
 noise_std = 2e-2
 node_type_embedding_size = 9
-#dt = 0.01
 dt=0.041666666666667
 lr_init = 1e-4
 lr_decay_rate = 0.1
 lr_decay_steps = 5e6
-loss_report_step = 10
+loss_report_step = 1000
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # an instance that transforms face-based graph to edge-based graph. Edge features are auto-computed using "Cartesian" and "Distance"
@@ -186,6 +185,10 @@ def rollout(simulator: learned_simulator.MeshSimulator,
 
     return output_dict
 
+def acceleration_loss(pred_acc, target_acc, non_kinematic_mask):
+    errors = ((pred_acc - target_acc)**2)[non_kinematic_mask]  # only compute errors if node_types is NORMAL or OUTFLOW
+    loss = torch.mean(errors)
+    return loss
 
 def train(simulator):
 
@@ -194,6 +197,17 @@ def train(simulator):
     # Initiate training.
     optimizer = torch.optim.Adam(simulator.parameters(), lr=lr_init)
     step = 0
+    epoch = 0
+    steps_per_epoch = 0
+
+    valid_loss = 0
+    epoch_train_loss = 0
+    epoch_valid_loss = 0 
+
+    train_loss_hist = []
+    valid_loss_hist = []
+    epoch_ave_train_loss_hist = []
+    valid_loss_at_epoch_hist = []
 
     # Set model and its path to save, and load model.
     # If model_path does not exist create new directory and begin training.
@@ -242,10 +256,16 @@ def train(simulator):
                                                 dt=dt,
                                                 batch_size=FLAGS.batch_size)
 
+    ds_valid = data_loader.get_data_loader_by_samples(path=f'{FLAGS.data_path}/valid.npz',
+                                                      input_length_sequence=INPUT_SEQUENCE_LENGTH,
+                                                      dt=dt,
+                                                      batch_size=FLAGS.batch_size)
     not_reached_nsteps = True
     try:
         while not_reached_nsteps:
             for i, graph in enumerate(ds):
+                steps_per_epoch += 1
+
                 # Represent graph using edge_index and make edge_feature to be using [relative_distance, norm]
                 graph = transformer(graph.to(device))
 
@@ -267,10 +287,19 @@ def train(simulator):
                     edge_features=edge_features,
                     target_velocities=target_velocities,
                     velocity_noise=velocity_noise)
-                mask = torch.logical_or(node_types == NodeType.NORMAL, \
-					node_types == NodeType.HIGH_STRESS)
-                errors = ((pred_acc - target_acc)**2)[mask]  # only compute errors if node_types is NORMAL or OUTFLOW
-                loss = torch.mean(errors)
+                
+                non_kinematic_mask = torch.logical_or(node_types == NodeType.NORMAL, \
+                    node_types == NodeType.HIGH_STRESS)
+
+                # validation 
+                if step % loss_report_step == 0:
+                    sampled_valid_example = next(iter(ds_valid))
+                    valid_loss = validation(simulator, sampled_valid_example, device)
+                    valid_loss_hist.append(valid_loss)
+
+                loss = acceleration_loss(pred_acc, target_acc, non_kinematic_mask)
+                epoch_train_loss += loss
+                train_loss_hist.append(loss)
 
                 # Computes the gradient of loss
                 optimizer.zero_grad()
@@ -283,9 +312,9 @@ def train(simulator):
                     param['lr'] = lr_new
 
                 if step % loss_report_step == 0:
-                    print(f"Training step: {step}/{FLAGS.ntraining_steps}. Loss: {loss}.")
+                    print(f"Training step: {step}/{FLAGS.ntraining_steps}. Train loss: {loss}. Valid loss: {valid_loss}")
                     with open(model_path + 'loss_log.txt', 'a') as f:
-                        f.write(f"{step} {loss}\n")
+                        f.write(f"{step} {loss} {valid_loss}\n")
 
                 # Save model state
                 if step % FLAGS.nsave_steps == 0:
@@ -300,9 +329,51 @@ def train(simulator):
 
                 step += 1
 
+            # Epoch level statistics
+            # Record training loss at epoch
+            epoch_train_loss /= steps_per_epoch
+            epoch_ave_train_loss_hist.append(epoch_train_loss)
+            valid_loss_at_epoch_hist.append(valid_loss)
+            with open(model_path + 'epoch_loss_log.txt', 'a') as f:
+                f.write(f"{step} {epoch} {epoch_train_loss} {valid_loss}\n")
+            print('')
+            print(f"At epoch {epoch} and step {step}, epoch train loss: {epoch_train_loss}; valid loss: {valid_loss}")
+            if steps_per_epoch >= len(graph):
+                epoch += 1
+                
+            steps_per_epoch = 0
+            epoch_train_loss = 0
+
     except KeyboardInterrupt:
         pass
 
+def validation(
+    simulator,
+    graph,
+    device
+    ):
+    graph = transformer(graph.to(device))
+    node_types = graph.x[:, 0]  # (nnodes, )
+    current_velocities = graph.x[:, 1:3]  # (nnodes, 2)
+    edge_index = graph.edge_index  # (2, nedges)
+    edge_features = graph.edge_attr  # (nedges, 2)
+    target_velocities = graph.y  # (nnodes, 2)
+
+    # Get velocity noise
+    velocity_noise = get_velocity_noise(graph, noise_std=noise_std, device=device)  
+    pred_acc, target_acc = simulator.predict_acceleration(
+        current_velocities=current_velocities,
+        node_type=node_types,
+        edge_index=edge_index,
+        edge_features=edge_features,
+        target_velocities=target_velocities,
+        velocity_noise=velocity_noise)
+
+    non_kinematic_mask = torch.logical_or(node_types == NodeType.NORMAL, \
+                    node_types == NodeType.HIGH_STRESS)
+
+    loss = acceleration_loss(pred_acc, target_acc, non_kinematic_mask)
+    return loss
 
 def main(_):
 
