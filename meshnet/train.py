@@ -161,7 +161,6 @@ def rollout(simulator: learned_simulator.MeshSimulator,
         predictions.append(predicted_next_velocity)
         
         errors = ((pred_acc-target_acc)**2)[mask0]
-        print(step, errors, torch.mean(errors))
         acc_loss.append(torch.mean(errors))
         # Update current position for the next prediction
         current_velocities = predicted_next_velocity.to(device)
@@ -295,11 +294,11 @@ def train(simulator):
                 if step % loss_report_step == 0:
                     sampled_valid_example = next(iter(ds_valid))
                     valid_loss = validation(simulator, sampled_valid_example, device)
-                    valid_loss_hist.append(valid_loss)
+                    #valid_loss_hist.append(valid_loss)
 
                 loss = acceleration_loss(pred_acc, target_acc, non_kinematic_mask)
                 epoch_train_loss += loss
-                train_loss_hist.append(loss)
+                #train_loss_hist.append(loss)
 
                 # Computes the gradient of loss
                 optimizer.zero_grad()
@@ -332,8 +331,8 @@ def train(simulator):
             # Epoch level statistics
             # Record training loss at epoch
             epoch_train_loss /= steps_per_epoch
-            epoch_ave_train_loss_hist.append(epoch_train_loss)
-            valid_loss_at_epoch_hist.append(valid_loss)
+            #epoch_ave_train_loss_hist.append(epoch_train_loss)
+            #valid_loss_at_epoch_hist.append(valid_loss)
             with open(model_path + 'epoch_loss_log.txt', 'a') as f:
                 f.write(f"{step} {epoch} {epoch_train_loss} {valid_loss}\n")
             print('')
