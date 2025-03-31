@@ -46,6 +46,10 @@ class SamplesDataset(torch.utils.data.Dataset):
         # positions = np.transpose(positions)
         n_node_per_example = positions.shape[0]  # (nnode, )
         node_type = self._data[trajectory_idx]["node_type"][time_idx - 1]  # (nnode, 1)
+
+        # 20250328 add node_property
+        node_property = self._data[trajectory_idx]["node_property"][time_idx-1]  # (nnode, 1)
+
         velocity_feature = self._data[trajectory_idx]["velocity"][time_idx - 1]  # (nnode, dimension)
         velocity_target = self._data[trajectory_idx]["velocity"][time_idx]  # (nnode, dimension)
         pressure = self._data[trajectory_idx]["pressure"][time_idx - 1]  # (nnode, 1)
@@ -58,6 +62,7 @@ class SamplesDataset(torch.utils.data.Dataset):
         # aggregate node features
         node_features = torch.hstack(
             (torch.tensor(node_type).contiguous(),
+             torch.tensor(node_property).to(torch.float32).contiguous(),
              torch.tensor(velocity_feature).to(torch.float32).contiguous(),
              torch.tensor(pressure).to(torch.float32).contiguous(),
              torch.tensor(time_vector).to(torch.float32).contiguous())
@@ -96,6 +101,7 @@ class TrajectoriesDataset(torch.utils.data.Dataset):
         positions = self._data[idx]["pos"]  # (timesteps, nnode, dims)
         n_node_per_example = positions.shape[1]  # (nnode, )
         node_type = self._data[idx]["node_type"]  # (timesteps, nnode, dims)
+        node_property = self._data[idx]["node_property"]  # (timesteps, nnode, 1)
         velocity_feature = self._data[idx]["velocity"]  # (timesteps, nnode, dims)
         pressure = self._data[idx]["pressure"]  # (timesteps, nnode, 1)
         cells = self._data[idx]["cells"]  # (timesteps, ncell, nnode_per_cell)
@@ -103,6 +109,7 @@ class TrajectoriesDataset(torch.utils.data.Dataset):
         trajectory = (
             torch.tensor(positions).to(torch.float32).contiguous(),
             torch.tensor(node_type).contiguous(),
+            torch.tensor(node_property).to(torch.float32).contiguous(),
             torch.tensor(velocity_feature).to(torch.float32).contiguous(),
             torch.tensor(pressure).to(torch.float32).contiguous(),
             torch.tensor(cells).to(torch.float32).contiguous(),

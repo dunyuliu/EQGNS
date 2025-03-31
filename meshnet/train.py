@@ -96,9 +96,10 @@ def rollout(simulator: learned_simulator.MeshSimulator,
 
     node_coords = features[0]  # (timesteps, nnode, ndims)
     node_types = features[1]  # (timesteps, nnode, )
-    velocities = features[2]  # (timesteps, nnode, ndims)
-    pressures = features[3]  # (timesteps, nnode, )
-    cells = features[4]  # # (timesteps, ncells, nnode_per_cell)
+    node_property = features[2]  # (timesteps, nnode, )
+    velocities = features[3]  # (timesteps, nnode, ndims)
+    pressures = features[4]  # (timesteps, nnode, )
+    cells = features[5]  # # (timesteps, ncells, nnode_per_cell)
 
     initial_velocities = velocities[:INPUT_SEQUENCE_LENGTH]
     ground_truth_velocities = velocities[INPUT_SEQUENCE_LENGTH:]
@@ -115,12 +116,13 @@ def rollout(simulator: learned_simulator.MeshSimulator,
         # First, obtain data to form a graph
         current_node_coords = node_coords[step]
         current_node_type = node_types[step]
+        current_node_property = node_property[step]
         current_pressure = pressures[step]
         current_cell = cells[step]
         current_time_idx_vector = torch.tensor(np.full(current_node_coords.shape[0], step)).to(torch.float32).contiguous()
         next_ground_truth_velocities = ground_truth_velocities[step].to(device)
         current_example = (
-            (current_node_coords, current_node_type, current_velocities, current_pressure, current_cell, current_time_idx_vector),
+            (current_node_coords, current_node_type, current_node_property, current_velocities, current_pressure, current_cell, current_time_idx_vector),
             next_ground_truth_velocities)
 
         # Make graph
@@ -130,8 +132,9 @@ def rollout(simulator: learned_simulator.MeshSimulator,
 
         # Predict next velocity
         predicted_next_velocity = simulator.predict_velocity(
-            current_velocities=graph.x[:, 1:3],
+            current_velocities=graph.x[:, 2:4],
             node_type=graph.x[:, 0],
+            node_property=graph.x[:, 1],
             edge_index=graph.edge_index,
             edge_features=graph.edge_attr)
         
@@ -140,8 +143,9 @@ def rollout(simulator: learned_simulator.MeshSimulator,
 
         # Predict dynamics
         pred_acc, target_acc = simulator.predict_acceleration(
-            current_velocities=graph.x[:,1:3],
+            current_velocities=graph.x[:,2:4],
             node_type=graph.x[:,0],
+            node_property=graph.x[:,1],
             edge_index=graph.edge_index,
             edge_features=graph.edge_attr,
             target_velocities=graph.y,
@@ -178,6 +182,7 @@ def rollout(simulator: learned_simulator.MeshSimulator,
         'ground_truth_rollout': ground_truth_velocities.cpu().numpy(),
         'node_coords': node_coords.cpu().numpy(),
         'node_types': node_types.cpu().numpy(),
+        'node_property': node_property.cpu().numpy(),
         'mean_loss': loss.mean().cpu().numpy(),
         'mean_acc_loss':loss1.cpu().numpy()
     }
@@ -270,23 +275,29 @@ def train(simulator):
 
                 # Get inputs
                 node_types = graph.x[:, 0]
-                current_velocities = graph.x[:, 1:3]
+                node_property = graph.x[:, 1]
+                current_velocities = graph.x[:, 2:4]
                 edge_index = graph.edge_index
                 edge_features = graph.edge_attr
                 target_velocities = graph.y
 
                 # Get velocity noise
                 velocity_noise = get_velocity_noise(graph, noise_std=noise_std, device=device)
+                #print('before predict_acceleration in train loop')
+                #print(node_types, node_types.shape)
+                #print(node_property, node_property.shape)
+                #print(current_velocities, current_velocities.shape)
 
                 # Predict dynamics
                 pred_acc, target_acc = simulator.predict_acceleration(
                     current_velocities=current_velocities,
-                    node_type=node_types,
+                    node_type=node_types, node_property=node_property,
                     edge_index=edge_index,
                     edge_features=edge_features,
                     target_velocities=target_velocities,
                     velocity_noise=velocity_noise)
-                
+                #print('after predict_acceleration in train loop')
+
                 non_kinematic_mask = torch.logical_or(node_types == NodeType.NORMAL, \
                     node_types == NodeType.HIGH_STRESS)
 
@@ -353,7 +364,8 @@ def validation(
     ):
     graph = transformer(graph.to(device))
     node_types = graph.x[:, 0]  # (nnodes, )
-    current_velocities = graph.x[:, 1:3]  # (nnodes, 2)
+    node_property = graph.x[:, 1]  # (nnodes, )
+    current_velocities = graph.x[:, 2:4]  # (nnodes, 2)
     edge_index = graph.edge_index  # (2, nedges)
     edge_features = graph.edge_attr  # (nedges, 2)
     target_velocities = graph.y  # (nnodes, 2)
@@ -363,6 +375,7 @@ def validation(
     pred_acc, target_acc = simulator.predict_acceleration(
         current_velocities=current_velocities,
         node_type=node_types,
+        node_property=node_property,
         edge_index=edge_index,
         edge_features=edge_features,
         target_velocities=target_velocities,
@@ -384,7 +397,7 @@ def main(_):
     # load simulator
     simulator = learned_simulator.MeshSimulator(
         simulation_dimensions=2,
-        nnode_in=11,
+        nnode_in=12, 
         nedge_in=3,
         latent_dim=128,
         nmessage_passing_steps=15,

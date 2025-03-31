@@ -61,15 +61,20 @@ class MeshSimulator(nn.Module):
     def _encoder_preprocessor(self,
                               current_velocities: torch.tensor,
                               node_type: torch.tensor,
+                              node_property: torch.tensor,
                               velocity_noise: torch.tensor):
         """
         Take `current_velocity` (nnodes, dims) and node type (nnodes, 1),
         impose `velocity_noise`, convert integer `node_type` to onehot embedding `node_type`,
         concatenate as `node_features` and normalize it.
 
+        20250328: add customized_properties to node_features that may include 
+            - initial stress levels (scalar normalized from 0 to 1);
+            - a-b () normalized from 0 to 1;
         Args:
             current_velocities: current velocity at nodes (nnodes, dims)
             node_type: node_types (nnodes, )
+            node_property: (nnodes, )
             velocity_noise: velocity noise (nnodes, dims)
 
         Returns:
@@ -94,6 +99,10 @@ class MeshSimulator(nn.Module):
 #        print(node_type_onehot, node_type_onehot.shape)
         node_features.append(node_type_onehot)
 
+        # add customized properties
+        node_property = node_property.unsqueeze(-1)
+        node_features.append(node_property)
+
         node_features = torch.cat(node_features, dim=1)
         processed_node_features = self._node_normalizer(node_features, self.training)
 
@@ -103,6 +112,7 @@ class MeshSimulator(nn.Module):
             self,
             current_velocities,
             node_type,
+            node_property,
             edge_index,
             edge_features,
             target_velocities,
@@ -113,6 +123,7 @@ class MeshSimulator(nn.Module):
         Args:
             current_velocities: current velocity at nodes (nnodes, dims)
             node_type: node_types (nnodes, )
+            node_property: node_properties (nnodes, )
             edge_index: index describing edge connectivity between nodes (2, nedges)
             edge_features: [relative_distance, norm] (nedges, 3)
             target_velocities: ground truth velocity at next timestep
@@ -126,6 +137,7 @@ class MeshSimulator(nn.Module):
         processed_node_features = self._encoder_preprocessor(
             current_velocities,
             node_type,
+            node_property,
             velocity_noise)
 
         # predict acceleration
@@ -142,6 +154,7 @@ class MeshSimulator(nn.Module):
     def predict_velocity(self,
                          current_velocities,
                          node_type,
+                         node_property,
                          edge_index,
                          edge_features):
         """
@@ -158,6 +171,7 @@ class MeshSimulator(nn.Module):
         processed_node_features = self._encoder_preprocessor(
             current_velocities,
             node_type,
+            node_property,
             velocity_noise=None)
 
         # predict dynamics
