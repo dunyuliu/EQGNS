@@ -1,0 +1,22 @@
+{
+    "__comment" : "This is an example configuration file for the MeshNet GNS model.",
+    "__path" : "Put the config.json file under the model path.",
+    "version": 1.0,
+    "INPUT_SEQUENCE_LENGTH" : 1, 
+    "noise_std" : 2e-2,
+    "node_type_embedding_size" : 9,
+    "dt" : 0.041666666666667,
+    "lr_init" : 1e-4,
+    "lr_decay_rate" : 0.1,
+    "lr_decay_steps" : 5e6,
+    "loss_report_step" : 1000,
+    "simulator_simulation_dimensions" : 2,
+    "simulator_nnode_in" : 12,
+    "simulator_nedge_in" : 3,
+    "simulator_latent_dim" : 128,
+    "simulator_nmessage_passing_steps" : 15,
+    "simulator_nmlp_layers" : 2,
+    "simulator_mlp_hidden_dim" : 128,
+    "simulator_nnode_types" : 3,
+    "simulator_node_type_embedding_size" : 9
+}

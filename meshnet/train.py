@@ -12,6 +12,8 @@ from tqdm import tqdm
 from absl import flags
 from absl import app
 
+import json 
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from meshnet import data_loader
 from meshnet import learned_simulator
@@ -35,16 +37,6 @@ flags.DEFINE_string('rollout_filename', "rollout", help='Name saving the rollout
 flags.DEFINE_integer('ntraining_steps', int(1E7), help='Number of training steps.')
 flags.DEFINE_integer('nsave_steps', int(5000), help='Number of steps at which to save the model.')
 FLAGS = flags.FLAGS
-
-
-INPUT_SEQUENCE_LENGTH = 1
-noise_std = 2e-2
-node_type_embedding_size = 9
-dt=0.041666666666667
-lr_init = 1e-4
-lr_decay_rate = 0.1
-lr_decay_steps = 5e6
-loss_report_step = 1000
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # an instance that transforms face-based graph to edge-based graph. Edge features are auto-computed using "Cartesian" and "Distance"
@@ -388,6 +380,60 @@ def validation(
     return loss
 
 def main(_):
+    global config 
+    global INPUT_SEQUENCE_LENGTH
+    global noise_std
+    global node_type_embedding_size
+    global dt
+    global lr_init
+    global lr_decay_rate
+    global lr_decay_steps
+    global loss_report_step
+
+    # default system and GNS simulator parameters
+    config_file_path = f"{FLAGS.model_path}/config.json"
+    if os.path.exists(config_file_path):
+        with open(config_file_path, 'r') as f:
+            config = json.load(f)
+            print('config file found.')
+            print('System and GNS simulator configuration is', config)
+
+            INPUT_SEQUENCE_LENGTH = config['INPUT_SEQUENCE_LENGTH']
+            noise_std = config['noise_std']
+            node_type_embedding_size = config['node_type_embedding_size']
+            dt = config['dt']
+            lr_init = config['lr_init']
+            lr_decay_rate = config['lr_decay_rate']
+            lr_decay_steps = config['lr_decay_steps']
+            loss_report_step = config['loss_report_step']
+            simulator_simulation_dimensions = config['simulator_simulation_dimensions']
+            simulator_nnode_in = config['simulator_nnode_in']
+            simulator_nedge_in = config['simulator_nedge_in']
+            simulator_latent_dim = config['simulator_latent_dim']
+            simulator_nmessage_passing_steps = config['simulator_nmessage_passing_steps']
+            simulator_nmlp_layers = config['simulator_nmlp_layers']
+            simulator_mlp_hidden_dim = config['simulator_mlp_hidden_dim']
+            simulator_nnode_types = config['simulator_nnode_types']
+            simulator_node_type_embedding_size = config['simulator_node_type_embedding_size']
+    else:
+        print('No config file found. Using default parameters.')
+        INPUT_SEQUENCE_LENGTH = 1
+        noise_std = 2e-2
+        node_type_embedding_size = 9
+        dt=0.041666666666667
+        lr_init = 1e-4
+        lr_decay_rate = 0.1
+        lr_decay_steps = 5e6
+        loss_report_step = 1000
+        simulator_simulation_dimensions=2
+        simulator_nnode_in=12
+        simulator_nedge_in=3
+        simulator_latent_dim=128
+        simulator_nmessage_passing_steps=15
+        simulator_nmlp_layers=2
+        simulator_mlp_hidden_dim=128
+        simulator_nnode_types=3
+        simulator_node_type_embedding_size=9
 
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -396,15 +442,15 @@ def main(_):
 
     # load simulator
     simulator = learned_simulator.MeshSimulator(
-        simulation_dimensions=2,
-        nnode_in=12, 
-        nedge_in=3,
-        latent_dim=128,
-        nmessage_passing_steps=15,
-        nmlp_layers=2,
-        mlp_hidden_dim=128,
-        nnode_types=3,
-        node_type_embedding_size=9,
+        simulation_dimensions  = simulator_simulation_dimensions,
+        nnode_in               = simulator_nnode_in, 
+        nedge_in               = simulator_nedge_in,
+        latent_dim             = simulator_latent_dim,
+        nmessage_passing_steps = simulator_nmessage_passing_steps,
+        nmlp_layers            = simulator_nmlp_layers,
+        mlp_hidden_dim         = simulator_mlp_hidden_dim,
+        nnode_types            = simulator_nnode_types,
+        node_type_embedding_size = simulator_node_type_embedding_size,
         device=device)
 
     if FLAGS.mode == 'train':
