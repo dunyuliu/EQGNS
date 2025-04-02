@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.tri as tri
 from mpl_toolkits.axes_grid1 import ImageGrid
 from matplotlib import animation
-
+import json, os
 
 flags.DEFINE_string("rollout_dir", None, help="Directory where rollout.pkl are located")
 flags.DEFINE_string("rollout_name", None, help="Name of rollout `.pkl` file")
@@ -17,7 +17,23 @@ def render_gif_animation():
 
     rollout_path = f"{FLAGS.rollout_dir}/{FLAGS.rollout_name}.pkl"
     animation_filename = f"{FLAGS.rollout_dir}/{FLAGS.rollout_name}.gif"
+    
+    # if testset metadata exists, use the info for better rendering.
+    testset_metadata_name = f"{FLAGS.rollout_dir}/testset_metadata.json"
+    metadata_file_exists = os.path.exists(testset_metadata_name)
 
+    if metadata_file_exists == True:
+        with open(testset_metadata_name, "r") as f:
+            testset_metadata = json.load(f)     
+        model_id = int(FLAGS.rollout_name.split('_')[1])
+        print(model_id)
+        print(testset_metadata[model_id])
+        asp = testset_metadata[model_id]['asperity_location_km']
+        hw = testset_metadata[model_id]['asperity_half_square_size_km']
+        hypo = testset_metadata[model_id]['hypocenter_location_km']
+        asp_box = [[asp[0]+hw,asp[1]+hw], [asp[0]+hw,asp[1]-hw],[asp[0]-hw,asp[1]-hw],[asp[0]-hw,asp[1]+hw], [asp[0]+hw,asp[1]+hw]]        
+        asp_box = np.array(asp_box)
+    
     # read rollout data
     with open(rollout_path, 'rb') as f:
         result = pickle.load(f)
@@ -49,12 +65,12 @@ def render_gif_animation():
     fig = plt.figure(figsize=(6, 6.5))
 
     def animate(i):
-        print(f"Render step {i}/{n_timesteps}")
+        #print(f"Render step {i}/{n_timesteps}")
 
         fig.clear()
         grid = ImageGrid(fig, 111,
                          nrows_ncols=(2, 1),
-                         axes_pad=0.15,
+                         axes_pad=0.4,
                          share_all=True,
                          cbar_location="right",
                          cbar_mode="single",
@@ -66,6 +82,14 @@ def render_gif_animation():
             handle = grid[j].tripcolor(triang, vel[i], vmax=vmax, vmin=vmin)
             fig.colorbar(handle, cax=grid.cbar_axes[0])
             grid[j].set_title(sim)
+
+            if metadata_file_exists==True:
+                grid[j].plot(asp_box[:,0]*1e3, asp_box[:,1]*1e3, 'r')
+                grid[j].plot(hypo[0]*1e3, hypo[1]*1e3, 'r*', markersize=20)
+        
+            if j==1: 
+                grid[j].set_xlabel('Strike, m')
+            grid[j].set_ylabel('Dip, m')
 
     # Creat animation
     ani = animation.FuncAnimation(
