@@ -1,8 +1,17 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
 import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-metadata_root_path = "../results/case3.200m.hete/dataset/"
+font = {'family': 'serif',
+        'weight': 'bold',
+        'size': 10}
+plt.rc('font', **font)
+plt.rcParams['axes.labelweight'] = font['weight']     # Ensures bold axis labels
+plt.rcParams['axes.labelsize'] = font['size']          # Ensures correct font size for xlabel/ylabel
+
+metadata_root_path = "../results/case3.200m.homo.a.Vw/dataset/"
 
 # File paths for the JSON files
 train_file = metadata_root_path+"case3_200m_train.npz.metadata.json"
@@ -39,7 +48,7 @@ y = np.arange(-10, 0 + dy, dy)
 X, Y = np.meshgrid(x, y)
 
 # Plotting
-plt.figure(figsize=(4, 3))  # Adjust figure size to be smaller
+plt.figure(figsize=(6, 4))  # Adjust figure size to be smaller
 
 ax = plt.gca()  # Get current axis
 plt.plot(X, Y, marker='.', color='k', linestyle='none', markersize=2)
@@ -49,8 +58,8 @@ plt.scatter(valid_x, valid_y, c='green', label='Valid', alpha=0.8, s=20)
 plt.scatter(test_x, test_y, c='red', label='Test', alpha=0.8, s=20)
 
 # Labels and legend with larger font sizes
-plt.xlabel('Strike (km)', fontsize=12)
-plt.ylabel('Dip (km)', fontsize=12)
+plt.xlabel('Distance along strike (km)', fontsize=12)
+plt.ylabel('Distance along dip (km)', fontsize=12)
 #plt.title('Hypocenter Locations on Fault Plane (2D)', fontsize=14)
 plt.legend(fontsize=10, loc="best", markerscale=1.5)  # Adjust legend font size and marker scale
 

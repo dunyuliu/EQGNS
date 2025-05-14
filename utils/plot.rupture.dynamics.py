@@ -12,27 +12,11 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 
 font = {'family': 'serif',
         'weight': 'bold',
-        'size': 10}
+        'size': 12}
 plt.rc('font', **font)
-plt.rcParams['axes.titlesize'] = 10
-plt.rcParams['axes.labelsize'] = 10
-plt.rcParams['xtick.labelsize'] = 10
-plt.rcParams['ytick.labelsize'] = 10
-plt.rcParams['legend.fontsize'] = 10
-plt.rcParams['figure.titlesize'] = 10
-plt.rcParams['axes.labelweight'] = 'bold'
-plt.rcParams['axes.titleweight'] = 'bold'
-plt.rcParams['axes.titlepad'] = 5
-plt.rcParams['axes.labelpad'] = 5
-plt.rcParams['xtick.major.pad'] = 5
-plt.rcParams['ytick.major.pad'] = 5
-plt.rcParams['xtick.minor.pad'] = 5
-plt.rcParams['ytick.minor.pad'] = 5
-plt.rcParams['axes.linewidth'] = 0.5
-plt.rcParams['lines.linewidth'] = 0.5
-plt.rcParams['lines.markersize'] = 2
-plt.rcParams['figure.figsize'] = (6, 4)
-plt.rcParams['figure.dpi'] = 600
+plt.rcParams['axes.labelweight'] = font['weight']     # Ensures bold axis labels
+plt.rcParams['axes.labelsize'] = font['size']          # Ensures correct font size for xlabel/ylabel
+plt.rcParams['axes.titleweight'] = font['weight']         # Ensures correct font size for title
 # Define discrete stress levels and matching colors
 stress_bins = [0, 0.25, 0.5, 0.75, 1.0]
 colors = plt.cm.viridis([0.0, 0.25, 0.5, 0.75, 1.0])
@@ -62,20 +46,21 @@ def stress_to_color_mpa(s):
     elif s == '55MPa':
         return colors[4]
       
-case = 0
+case = 3
 if case ==0: 
-    case_path = "../results/case3.200m/nmp10.knox/model-3000000.pt/"
-    test_metadata = os.path.join("./results/case3.200m/dataset/case3.200m.test.metadata.json")
+    case_path = "../results/case3.200m.homo.a.Vw/nmp10.cotopaxi/model-3000000.pt/"
+    test_metadata = ""
 elif case == 1:
-    case_path = "../results/case4.200m.multi.stress/nmp10.knox/model-2000000.pt/"
-    test_metadata = os.path.join("../results/case4.200m.multi.stress/dataset/case4.200m.multi.stress.test.metadata.json")
+    case_path = "../results/case3.200m.homo.a.Vw.others/nmp10.cotopaxi/model-3000000.pt/"
+    test_metadata = ""
 elif case == 2:
-    case_path = "../results/case4.200m.multi.asp/nmp10.cotopaxi/model-4000000.pt/"
-    test_metadata = os.path.join("./case4.200m.multi.asp/dataset/case4.200m.checkerboard.stress.test.metadata.json")
+    case_path = "../results/case4.200m.multi.stress.homo.a.Vw/nmp10.cotopaxi/model-3000000.pt/"
+    test_metadata = os.path.join("../results/case4.200m.multi.stress.homo.a.Vw/dataset/case4.200m.multi.stress.test.metadata.json")
 elif case == 3:
-    case_path = "./case3.200m.others/nmp10.cotopaxi/model-2000000.pt/"
-    test_metadata = "./case3.200m.others/dataset/case3.200m.others.test.metadata.json"
-    #test_metadata = os.path.join("./case3.200m.others/dataset/case4.200m.checkerboard.stress.test.metadata.json")
+    case_path = "../results/case4.200m.multi.asp.homo.a.Vw/nmp10.cotopaxi/model-3000000.pt/"
+    test_metadata = os.path.join("../results/case4.200m.multi.asp.homo.a.Vw/dataset/case4.200m.checkerboard.stress.test.metadata.json")
+
+
 case_id = int(sys.argv[1])
 case_name = case_path + f"rollout_{sys.argv[1]}.pkl"
 
@@ -119,7 +104,7 @@ if os.path.exists(test_metadata):
 
 print(f"processing {case_name}")  # Removed as "processing" is not defined
 dt = 0.0167777 # 0.0167777 seconds per timestep
-sliprate_threshold = 5 # slip rate threshold for rupture time
+sliprate_threshold = 0.1 # slip rate threshold for rupture time
 vmin, vmax = 0, 10
 
 # read rollout data
@@ -172,10 +157,12 @@ def plot_slip_rate_snapshots(velocity_result, triang, timestep_id, case_id, case
 
     # Loop through each simulation and plot the velocity
     if mode == 'both':
-        fig = plt.figure(figsize=(6, 6))
+        fig = plt.figure(figsize=(5, 5))
+        if case == 1: # longer figure for case 1
+            fig = plt.figure(figsize=(5, 3))
         grid = ImageGrid(fig, 111,
                             nrows_ncols=(2, 1),
-                            axes_pad=0.15,
+                            axes_pad=0.25,
                             share_all=True,
                             cbar_location="right",
                             cbar_mode="single",
@@ -184,8 +171,13 @@ def plot_slip_rate_snapshots(velocity_result, triang, timestep_id, case_id, case
         for j, (sim, vel) in enumerate(velocity_result.items()):
             #grid[j].triplot(triang, 'o-', color='k', ms=0.5, lw=0.3)
             handle = grid[j].tripcolor(triang, vel[timestep_id], vmax=vmax, vmin=vmin)
-            fig.colorbar(handle, cax=grid.cbar_axes[0])
-            grid[j].set_title(sim)
+            cbar = fig.colorbar(handle, cax=grid.cbar_axes[0])
+            cbar.set_label("Slip Rate (m/s)")
+            grid[j].set_title(sim, fontweight='bold')
+        label = grid[0].set_ylabel("Distance along dip (km)")
+        label.set_position((-0.0, -0.4))
+        grid[1].set_xlabel("Distance along strike (km)")
+
     else:
         fig = plt.figure(figsize=(6, 3))
         grid = ImageGrid(fig, 111, nrows_ncols=(1, 1))
@@ -233,8 +225,9 @@ def plot_combined_rpt_contours(triang, rpt_gt, rpt_pred, filename, asp_rect=None
         filename: path to save the plot
         asp_rect: list of patches for asperities (optional)
     """
-    fig, ax = plt.subplots(figsize=(10, 5))
-
+    fig, ax = plt.subplots(figsize=(5, 4))
+    if case == 1: # longer figure for case 1
+        fig, ax = plt.subplots(figsize=(8, 4))
     # Mask unreachable points
     mask_gt = np.ma.masked_where(rpt_gt >= 999, rpt_gt)
     mask_pred = np.ma.masked_where(rpt_pred >= 999, rpt_pred)
@@ -243,16 +236,16 @@ def plot_combined_rpt_contours(triang, rpt_gt, rpt_pred, filename, asp_rect=None
     # Ground truth: solid black lines
     mask_gt = mask_gt.filled(0)
     cs_gt = ax.tricontour(triang, mask_gt, levels=levels, colors='black', linewidths=1.0)
-    contour_labels = ax.clabel(cs_gt, fmt=lambda x: f'GT {x:.1f}', fontsize=10, inline=True, inline_spacing=20)
+    contour_labels = ax.clabel(cs_gt, fmt=lambda x: f'{x:.1f}', inline=True, inline_spacing=20)
     for label in contour_labels:
-        label.set_position(label.get_position() + np.array([0, 0.2]))  # Adjust the offset as needed
+        label.set_position(label.get_position() + np.array([0, 0.3]))  # Adjust the offset as needed
 
     # Prediction: dashed red lines
     mask_pred = mask_pred.filled(0)
     cs_pred = ax.tricontour(triang, mask_pred, levels=levels, colors='red', linestyles='--', linewidths=1.0)
-    contour_labels = ax.clabel(cs_pred, fmt=lambda x: f'PR {x:.1f}', fontsize=10, inline=True, inline_spacing=10)
+    contour_labels = ax.clabel(cs_pred, fmt=lambda x: f'{x:.1f}', inline=True, inline_spacing=10)
     for label in contour_labels:
-        label.set_position(label.get_position() + np.array([0, -0.2]))  # Adjust the offset as needed
+        label.set_position(label.get_position() + np.array([0, -0.3]))  # Adjust the offset as needed
 
     if asp_rect is not None:
         for rect in asp_rect:
@@ -261,11 +254,11 @@ def plot_combined_rpt_contours(triang, rpt_gt, rpt_pred, filename, asp_rect=None
                 patches.Patch(color=colors[i], label=f'{stress_bins[i]:.2f}')
                 for i in range(len(stress_bins))
             ]
-        ax.legend(handles=legend_patches, title="Normalized Stress", fontsize=9, title_fontsize=10, loc='best')
+        #ax.legend(handles=legend_patches, title="Normalized Stress", fontsize=10, title_fontsize=10, loc='lower left', framealpha=0.5)
     #ax.set_title("Rupture Time: Ground Truth vs Prediction")
     ax.grid(True)
-    ax.set_xlabel("Strike (m)")
-    ax.set_ylabel("Dip (m)")
+    ax.set_xlabel("Distance along strike (km)")
+    ax.set_ylabel("Distance along dip (km)")
     ax.set_aspect('equal', adjustable='box')
     fig.tight_layout()
     fig.savefig(filename, dpi=600)
@@ -305,12 +298,12 @@ def plot_slip_rate_time_series(velocity_result, triang, node_loc, dt, case_id, c
         case_path: path to save the plot
     """
     timeseries = extract_timeseries(velocity_result, triang, node_loc)
-    fig, ax = plt.subplots(figsize=(5, 5))
+    fig, ax = plt.subplots(figsize=(4.2, 4))
     for sim, vel in timeseries.items():
         ax.plot(np.arange(len(vel)) * dt, vel, label=sim, linewidth=2)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Slip Rate (m/s)")
-    ax.set_title(f"Slip Rate Time Series at Node Location {node_loc}")
+    ax.set_title(f"Node Location {node_loc}")
     ax.legend()
     plt.savefig(os.path.join(case_path, f"b.Sliprate_time_series_node_{node_loc[0]}_{node_loc[1]}_rollout_{case_id}.png"), dpi=600)
     plt.close(fig)
@@ -321,3 +314,12 @@ plot_slip_rate_time_series(velocity_result, triang, (7, -7), dt, case_id, case_p
 plot_slip_rate_time_series(velocity_result, triang, (-1, -3), dt, case_id, case_path)
 plot_slip_rate_time_series(velocity_result, triang, (3, -7), dt, case_id, case_path)
 plot_slip_rate_time_series(velocity_result, triang, (7, -3), dt, case_id, case_path)
+
+fig2, ax2 = plt.subplots(figsize=(5, 4))
+legend_patches = [
+                patches.Patch(color=colors[i], label=f'{stress_bins[i]:.2f}')
+                for i in range(len(stress_bins))
+            ]
+ax2.legend(handles=legend_patches, title="Normalized Stress", fontsize=15, title_fontsize=15, loc='lower left', framealpha=0.5)
+#plt.tight_layout()
+#plt.show()

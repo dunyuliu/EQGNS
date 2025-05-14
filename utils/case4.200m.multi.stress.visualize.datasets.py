@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
 import json
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -6,7 +8,12 @@ import numpy as np
 import os
 from collections import defaultdict
 
-plt.rcParams.update({'font.size': 14})
+font = {'family': 'serif',
+        'weight': 'bold',
+        'size': 12}
+plt.rc('font', **font)
+plt.rcParams['axes.labelweight'] = font['weight']     # Ensures bold axis labels
+plt.rcParams['axes.labelsize'] = font['size']          # Ensures correct font size for xlabel/ylabel
 
 # Define discrete stress levels and matching colors
 stress_bins = [0, 0.25, 0.5, 0.75, 1.0]
@@ -32,21 +39,16 @@ norm = BoundaryNorm(bounds, cmap.N)
 # === CONFIGURATION ===
 # Folder or file pattern containing your datasets
 
-dataset_root_path = "case4.200m.multi.stress/dataset"
+dataset_root_path = "../results/case4.200m.multi.stress.homo.a.Vw/dataset"
 dataset_filenames = {'train': 'case4.200m.multi.stress.train.metadata.json',
                     'valid': 'case4.200m.multi.stress.valid.metadata.json',
                     'test': 'case4.200m.multi.stress.test.metadata.json'}
 
-# Function to convert stress values to color
-#def stress_to_color(stress1, stress2):
-#    avg_stress = (stress1 + stress2) / 2
-#    cmap = plt.cm.viridis
-#    return cmap(avg_stress)
-
 # Loop over each JSON file
+
 for i, (key, json_file) in enumerate(dataset_filenames.items()):
     json_file = os.path.join(dataset_root_path, json_file)
-
+    ntag = 0
     with open(json_file) as f:
         data = json.load(f)
 
@@ -58,7 +60,8 @@ for i, (key, json_file) in enumerate(dataset_filenames.items()):
         grouped_by_hypo[hypo].append(item)
 
     for hypo_loc, items in grouped_by_hypo.items():
-        fig, ax = plt.subplots(figsize=(10, 8))
+        ntag += 1
+        fig, ax = plt.subplots(figsize=(5, 4))
          # Plot the common hypocenter
         ax.plot(hypo_loc[0], hypo_loc[1], marker='*', color='red', markersize=25)
 
@@ -78,8 +81,8 @@ for i, (key, json_file) in enumerate(dataset_filenames.items()):
             ax.add_patch(rect)
 
         # Final plot setup
-        ax.set_xlabel("Strike (km)")
-        ax.set_ylabel("Dip (km)")
+        ax.set_xlabel("Distance along strike (km)")
+        ax.set_ylabel("Distance along dip (km)")
         #ax.set_title("2D Fault Plot: Hypocenters & Asperities from Multiple Datasets")
         ax.set_aspect("equal")
         ax.grid(True)
@@ -93,8 +96,9 @@ for i, (key, json_file) in enumerate(dataset_filenames.items()):
             patches.Patch(color=colors[i], label=f'{stress_bins[i]:.2f}')
             for i in range(len(stress_bins))
         ]
-        ax.legend(handles=legend_patches, title="Normalized Stress", fontsize=9, title_fontsize=10, loc='best')
+        if ntag == 2:
+            ax.legend(handles=legend_patches, title="Normalized Stress", fontsize=8, title_fontsize=8, loc='best', framealpha=0.3)
         plt.tight_layout()
         tag = f"x{hypo_loc[0]}_y{hypo_loc[1]}".replace('.', 'p')
-        plt.savefig(f"0.production_figures/case4.200m.multi.stress.{key}.{tag}.dataset.png", dpi=600)
+        plt.savefig(f"../0.production_figures/case4.200m.multi.stress.{key}.{tag}.dataset.png", dpi=600)
         plt.close(fig)
