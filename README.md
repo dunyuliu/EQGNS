@@ -14,10 +14,7 @@ Modifications are mainly made to MeshNet and they include:
 
 Earthquake examples:
 
-![Longer fault dynamics rollout, where the model is trained at shorter length (GNS' inductive bias)](docs/img/eq_long_fault_rollout_0.mp4)
-> GNS prediction of rupture dynamics for 40 km long rupture after training for 3 million steps.
-
-![Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses](docs/img/eq_multi_asp_rollout_0.mp4)
+![Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses](docs/img/eq_multi_asp_rollout_0.gif)
 > GNS prediction of multi-asperity prestress rupture at 3 million trained steps.
 
 ## Introduction
@@ -357,3 +354,5 @@ Kumar, K., & Vantassel, J. (2023). GNS: A generalizable Graph Neural Network-bas
 * Vantassel, Joseph; Kumar, Krishna (2022) “Graph Network Simulator Datasets.” DesignSafe-CI. https://doi.org/10.17603/ds2-0phb-dg64 v1 
 * Kumar, K., Y. Choi. (2023) "Cylinder flow with graph neural network-based simulator." DesignSafe-CI. https://doi.org/10.17603/ds2-fzg7-1719
 
+#![Longer fault dynamics rollout, where the model is trained at shorter length (GNS' inductive bias)](docs/img/eq_long_fault_rollout_0.gif)
+#> GNS prediction of rupture dynamics for 40 km long rupture after training for 3 million steps.
