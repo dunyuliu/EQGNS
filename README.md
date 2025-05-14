@@ -12,6 +12,14 @@ Modifications are mainly made to MeshNet and they include:
  4. Change the numpy version for local server installation in requirements.txt.
  5. Add postprocessing utilities to evaluate GNS prediction and performance.
 
+Earthquake examples:
+
+![Longer fault dynamics rollout, where the model is trained at shorter length (GNS' inductive bias)](docs/img/eq_long_fault_rollout_0.mp4)
+> GNS prediction of rupture dynamics for 40 km long rupture after training for 3 million steps.
+
+![Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses](docs/img/eq_multi_asp_rollout_0.mp4)
+> GNS prediction of multi-asperity prestress rupture at 3 million trained steps.
+
 ## Introduction
 Graph Network-based Simulator (GNS) is a generalizable, efficient, and accurate machine learning (ML)-based surrogate simulator for particle- and mesh-based physical systems using Graph Neural Networks (GNNs). GNS has shown remarkable generability to simulated fluid, solid, deformables, particle systems with significant speedup comparing to traditional physics-based counterparts. GNS exploits distributed data parallelism to achieve fast multi-GPU training.
 
