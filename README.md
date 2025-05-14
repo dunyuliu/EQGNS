@@ -14,10 +14,10 @@ Modifications are mainly made to MeshNet and they include:
 
 Earthquake examples:
 
-![Longer fault dynamics rollout, where the model is trained at shorter length (GNS' inductive bias)](docs/img/eq_long_fault_rollout_0.mp4)
+![Longer fault dynamics rollout, where the model is trained at shorter length (GNS' inductive bias)](docs/img/eq_long_fault_rollout_0.gif)
 > GNS prediction of rupture dynamics for 40 km long rupture after training for 3 million steps.
 
-![Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses](docs/img/eq_multi_asp_rollout_0.mp4)
+![Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses](docs/img/eq_multi_asp_rollout_0.gif)
 > GNS prediction of multi-asperity prestress rupture at 3 million trained steps.
 
 ## Introduction
