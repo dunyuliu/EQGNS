@@ -14,7 +14,10 @@ Modifications are mainly made to MeshNet and they include:
 
 Earthquake examples:
 
-![Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses](docs/img/eq_multi_asp_rollout_0.gif)
+<p align="left">
+ <img src="docs/img/eq_multi_asp_rollout_0.gif" width="300" alt="Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses"/>
+</p>
+
 > GNS prediction of multi-asperity prestress rupture at 3 million trained steps.
 
 ## Introduction
