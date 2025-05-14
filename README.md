@@ -1,17 +1,19 @@
-# Graph Network Simulator (GNS) and MeshNet
+# Graph Network-based Simulator (GNS) for earthquake rupture dynamics
 
-[![DOI](https://zenodo.org/badge/427487727.svg)](https://zenodo.org/badge/latestdoi/427487727)
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/geoelements/gns/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/geoelements/gns/tree/main)
-[![Docker](https://quay.io/repository/geoelements/gns/status "Docker Repository on Quay")](https://quay.io/repository/geoelements/gns)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/geoelements/gns/main/license.md)
 
-> Krishna Kumar, The University of Texas at Austin.
-> Joseph Vantassel, Texas Advanced Computing Center, UT Austin.
-> Yongjin Choi, The University of Texas at Austin.
+## Notes about changes
+This version of GNS is adapted from [geoelement/gns](https://github.com/geoelements/gns.git) by Drs. Krishna Kumar, Joseph Vantassel, and Yongjin Choi (The University of Texas at Austin). 
 
-Graph Network-based Simulator (GNS) is a generalizable, efficient, and accurate machine learning (ML)-based surrogate simulator for particulate and fluid systems using Graph Neural Networks (GNNs). GNS code is a viable surrogate for numerical methods such as Material Point Method, Smooth Particle Hydrodynamics and Computational Fluid dynamics. GNS exploits distributed data parallelism to achieve fast multi-GPU training. The GNS code can handle complex boundary conditions and multi-material interactions.
+Modifications are mainly made to MeshNet and they include:
+ 1. Add a parameter configuration system.
+ 2. Add preprocessing pipeline to convert earthquake dynamic rupture states computed by [EQdyna](https://github.com/EQDYNA/EQdyna.git) to trajectories recognizable to the GNS.
+ 3. Add the postprocessing rendering to earthquake rupture dynamics.
+ 4. Change the numpy version for local server installation in requirements.txt.
+ 5. Add postprocessing utilities to evaluate GNS prediction and performance.
 
-MeshNet is a scalable surrogate simulator for any mesh-based models like Finite Element Analysis (FEA), Computational Fluid Dynammics (CFD), and Finite Difference Methods (FDM). 
+## Introduction
+Graph Network-based Simulator (GNS) is a generalizable, efficient, and accurate machine learning (ML)-based surrogate simulator for particle- and mesh-based physical systems using Graph Neural Networks (GNNs). GNS has shown remarkable generability to simulated fluid, solid, deformables, particle systems with significant speedup comparing to traditional physics-based counterparts. GNS exploits distributed data parallelism to achieve fast multi-GPU training.
 
 ## Run GNS/MeshNet
 
