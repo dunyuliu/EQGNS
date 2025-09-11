@@ -21,8 +21,9 @@ nstep = 5
 #model_path = "../results/case4.200m.multi.stress/nmp10.knox/"
 
 model_list = ["../results/case3.200m.homo.a.Vw/nmp10.cotopaxi/", 
-              "../results/case4.200m.multi.stress.homo.a.Vw/nmp10.cotopaxi/"]
-
+              "../results/case4.200m.multi.stress.homo.a.Vw/nmp10.cotopaxi/",
+              "../results/case4.200m.multi.stress.160scenarios.homo.a.Vw/nmp10.lr3e-5.b8.cotopaxi.r1/",
+              "../results/case4.200m.multi.stress.homo.a.Vw/r1_lr3e-05_bs2_ns0.02_nmp10_knox/"]
 for model_path in model_list:
     loss_log = np.loadtxt(model_path+'loss_log.txt')
     #valid_loss_log = np.loadtxt(model_path+'valid_loss_log.txt')
@@ -36,8 +37,8 @@ for model_path in model_list:
     loss_log_coarse = np.array(loss_log_coarse)
 
     fig, ax = plt.subplots(figsize=(5,4))
-    ax.plot(loss_log_coarse[:,0], loss_log_coarse[:,1], label='train')
-    ax.plot(loss_log_coarse[:,0], loss_log_coarse[:,2], label='valid')
+    ax.plot(loss_log_coarse[:,0], loss_log_coarse[:,1], label='training')
+    ax.plot(loss_log_coarse[:,0], loss_log_coarse[:,2], label='validation')
 
     ax.set_yscale('log')
     ax.set_xlabel("Training steps")
