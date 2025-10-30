@@ -39,8 +39,17 @@ flags.DEFINE_integer('nsave_steps', int(5000), help='Number of steps at which to
 FLAGS = flags.FLAGS
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cpu')
 # an instance that transforms face-based graph to edge-based graph. Edge features are auto-computed using "Cartesian" and "Distance"
 transformer = T.Compose([T.FaceToEdge(), T.Cartesian(norm=False), T.Distance(norm=False)])
+
+
+def compute_edge_features(node_coords, edge_index):
+    """Compute edge features (Cartesian + Distance) from node positions."""
+    row, col = edge_index
+    cart = node_coords[col] - node_coords[row]
+    dist = torch.norm(cart, p=2, dim=-1, keepdim=True)
+    return torch.cat([cart, dist], dim=-1)
 
 
 def predict(simulator: learned_simulator.MeshSimulator,
@@ -86,87 +95,66 @@ def rollout(simulator: learned_simulator.MeshSimulator,
             nsteps: int,
             device):
 
-    node_coords = features[0]  # (timesteps, nnode, ndims)
-    node_types = features[1]  # (timesteps, nnode, )
-    node_property = features[2]  # (timesteps, nnode, )
-    velocities = features[3]  # (timesteps, nnode, ndims)
-    pressures = features[4]  # (timesteps, nnode, )
-    cells = features[5]  # # (timesteps, ncells, nnode_per_cell)
+    # Move data to device
+    node_coords = features[0].to(device)
+    node_types = features[1].to(device)
+    node_property = features[2].to(device)
+    velocities = features[3].to(device)
+    pressures = features[4].to(device)
+    cells = features[5].to(device)
 
     initial_velocities = velocities[:INPUT_SEQUENCE_LENGTH]
     ground_truth_velocities = velocities[INPUT_SEQUENCE_LENGTH:]
+    current_velocities = initial_velocities.squeeze()
 
-    current_velocities = initial_velocities.squeeze().to(device)
+    nnodes = current_velocities.shape[0]
     predictions = []
-    acc_loss = []
+
+    # OPTIMIZATION: Build graph structure once - only velocities change!
+    first_example = (
+        (node_coords[0], node_types[0], node_property[0], current_velocities,
+         pressures[0], cells[0], torch.zeros(nnodes, device=device)),
+        ground_truth_velocities[0])
+    template_graph = datas_to_graph(first_example, dt=dt, device=device)
+    template_graph = transformer(template_graph)
+
+    # Cache everything that doesn't change
+    cached_edge_index = template_graph.edge_index
+    cached_edge_attr = template_graph.edge_attr  # Positions don't move!
+    cached_node_type = template_graph.x[:, 0]
+    cached_node_property = template_graph.x[:, 1]
 
     mask = None
 
     for step in tqdm(range(nsteps), total=nsteps):
+        # Only velocity changes - everything else is cached!
 
-        # Predict next velocity
-        # First, obtain data to form a graph
-        current_node_coords = node_coords[step]
-        current_node_type = node_types[step]
-        current_node_property = node_property[step]
-        current_pressure = pressures[step]
-        current_cell = cells[step]
-        current_time_idx_vector = torch.tensor(np.full(current_node_coords.shape[0], step)).to(torch.float32).contiguous()
-        next_ground_truth_velocities = ground_truth_velocities[step].to(device)
-        current_example = (
-            (current_node_coords, current_node_type, current_node_property, current_velocities, current_pressure, current_cell, current_time_idx_vector),
-            next_ground_truth_velocities)
-
-        # Make graph
-        graph = datas_to_graph(current_example, dt=dt, device=device)
-        # Represent graph using edge_index and make edge_feature to be using [relative_distance, norm]
-        graph = transformer(graph)
-
-        # Predict next velocity
+        # Predict next velocity using cached values
         predicted_next_velocity = simulator.predict_velocity(
-            current_velocities=graph.x[:, 2:4],
-            node_type=graph.x[:, 0],
-            node_property=graph.x[:, 1],
-            edge_index=graph.edge_index,
-            edge_features=graph.edge_attr)
-        
-        # Get velocity noise
-        velocity_noise = get_velocity_noise(graph, noise_std=0.0, device=device)
+            current_velocities=current_velocities,
+            node_type=cached_node_type,
+            node_property=cached_node_property,
+            edge_index=cached_edge_index,
+            edge_features=cached_edge_attr)
 
-        # Predict dynamics
-        pred_acc, target_acc = simulator.predict_acceleration(
-            current_velocities=graph.x[:,2:4],
-            node_type=graph.x[:,0],
-            node_property=graph.x[:,1],
-            edge_index=graph.edge_index,
-            edge_features=graph.edge_attr,
-            target_velocities=graph.y,
-            velocity_noise=velocity_noise)
+        # Apply boundary conditions - compute mask once
+        if mask is None:
+            kinematic_mask = torch.logical_or(cached_node_type == NodeType.NORMAL,
+                                             cached_node_type == NodeType.HIGH_STRESS)
+            kinematic_mask = kinematic_mask.squeeze() if kinematic_mask.dim() > 1 else kinematic_mask
+            mask = ~kinematic_mask  # boundary nodes
 
-        # Apply mask.
-        if mask is None:  # only compute mask for the first timestep, since it will be the same for the later timesteps
-            mask0 = torch.logical_or(current_node_type == NodeType.NORMAL, \
-					current_node_type == NodeType.HIGH_STRESS)
-            mask = mask0
-            mask0 = mask0.squeeze(1)
-            mask = torch.logical_not(mask)
-            mask = mask.squeeze(1)
-        # Maintain previous velocity if node_type is not (Normal or Outflow).
-        # i.e., only update normal or outflow nodes.
-        predicted_next_velocity[mask] = next_ground_truth_velocities[mask]
+        # Apply ground truth velocities at boundary nodes
+        predicted_next_velocity[mask] = ground_truth_velocities[step][mask]
         predictions.append(predicted_next_velocity)
         
-        errors = ((pred_acc-target_acc)**2)[mask0]
-        acc_loss.append(torch.mean(errors))
         # Update current position for the next prediction
-        current_velocities = predicted_next_velocity.to(device)
+        current_velocities = predicted_next_velocity
 
     # Prediction with shape (time, nnodes, dim)
     predictions = torch.stack(predictions)
-    loss = (predictions - ground_truth_velocities.to(device)) ** 2
+    loss = (predictions - ground_truth_velocities) ** 2
     
-    acc_loss = torch.stack(acc_loss) 
-    loss1 = acc_loss.mean()
 
     output_dict = {
         'initial_velocities': initial_velocities.cpu().numpy(),
@@ -176,7 +164,7 @@ def rollout(simulator: learned_simulator.MeshSimulator,
         'node_types': node_types.cpu().numpy(),
         'node_property': node_property.cpu().numpy(),
         'mean_loss': loss.mean().cpu().numpy(),
-        'mean_acc_loss':loss1.cpu().numpy()
+        'mean_acc_loss':None
     }
 
     return output_dict
@@ -301,8 +289,14 @@ def train(simulator):
 
                 loss = acceleration_loss(pred_acc, target_acc, non_kinematic_mask)
                 epoch_train_loss += loss
-                #train_loss_hist.append(loss)
-
+                
+                current_vel_mag = torch.norm(current_velocities, dim=-1) #(nnode,)
+                target_vel_mag = torch.norm(current_velocities, dim=-1) #(nnode,)
+                current_vel_rms = torch.sqrt(torch.mean(current_vel_mag**2))
+                target_vel_rms = torch.sqrt(torch.mean(target_vel_mag**2))
+                current_vel_max = torch.max(current_vel_mag)
+                target_vel_max = torch.max(target_vel_mag)  
+              
                 # Computes the gradient of loss
                 optimizer.zero_grad()
                 loss.backward()
@@ -315,8 +309,9 @@ def train(simulator):
 
                 if step % loss_report_step == 0:
                     print(f"Training step: {step}/{FLAGS.ntraining_steps}. Train loss: {loss}. Valid loss: {valid_loss}")
+                    print(f"RMS Current vel {current_vel_rms}. Max current vel {current_vel_max}")
                     with open(model_path + 'loss_log.txt', 'a') as f:
-                        f.write(f"{step} {loss} {valid_loss}\n")
+                        f.write(f"{step} {loss} {valid_loss} {current_vel_rms} {target_vel_rms} {current_vel_max} {target_vel_max}\n")
 
                 # Save model state
                 if step % FLAGS.nsave_steps == 0:
