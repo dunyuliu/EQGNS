@@ -203,7 +203,7 @@ class MeshSimulator(nn.Module):
         Args:
           path: Model path
         """
-        dicts = torch.load(path)
+        dicts = torch.load(path, map_location=self._device)
         self.load_state_dict(dicts["model"])
 
         keys = list(dicts.keys())

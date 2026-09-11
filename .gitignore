@@ -148,3 +148,12 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+
+# Local data, environments, and scratch (not for the repo)
+gns-sample/
+work.test/
+dataset_archive/
+model/
+venv/
+venv_cotopaxi/
+misc/

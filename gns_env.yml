@@ -1,0 +1,25 @@
+name: gns
+channels:
+  - pyg
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - matplotlib
+  - pytest
+  - tqdm
+  - toml
+  - autopep8
+  - absl-py
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pip:
+      - dm-tree
+      - pyevtk
+      - torch-geometric
+      - torch-scatter
+      - torch-sparse
+      - torch-cluster
