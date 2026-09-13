@@ -1,16 +1,21 @@
-# Graph Network-based Simulator (GNS) for earthquake rupture dynamics
+# EQGNS: Earthquake rupture dynamics from Graph Neural Networks
 
+[![Paper DOI](https://img.shields.io/badge/JGR%20Solid%20Earth-10.1029%2F2025JB031981-blue)](https://doi.org/10.1029/2025JB031981)
+[![Software DOI](https://img.shields.io/badge/Zenodo-10.5281%2Fzenodo.17095311-blue)](https://doi.org/10.5281/zenodo.17095311)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/geoelements/gns/main/license.md)
 
-## Notes about changes
-This version of GNS is adapted from [geoelement/gns](https://github.com/geoelements/gns.git) by Drs. Krishna Kumar, Joseph Vantassel, and Yongjin Choi (The University of Texas at Austin). 
+EQGNS is a Graph Network-based Simulator (GNS) for 2D earthquake dynamic rupture. It is the code behind:
+
+> Liu, D., & Becker, T. W. (2025). Earthquake rupture dynamics from graph neural networks. *Journal of Geophysical Research: Solid Earth*, 130. https://doi.org/10.1029/2025JB031981
+
+This repository is a fork of [geoelements/gns](https://github.com/geoelements/gns.git) by Drs. Krishna Kumar, Joseph Vantassel, and Yongjin Choi (The University of Texas at Austin).
 
 Modifications are mainly made to MeshNet and they include:
- 1. Add a parameter configuration system.
- 2. Add preprocessing pipeline to convert earthquake dynamic rupture states computed by [EQdyna](https://github.com/EQDYNA/EQdyna.git) to trajectories recognizable to the GNS.
- 3. Add the postprocessing rendering to earthquake rupture dynamics.
- 4. Change the numpy version for local server installation in requirements.txt.
- 5. Add postprocessing utilities to evaluate GNS prediction and performance.
+ 1. A parameter configuration system (`config.json` under the model path; see `meshnet/example.config.json`).
+ 2. A preprocessing pipeline to convert earthquake dynamic rupture states computed by [EQdyna](https://github.com/EQDYNA/EQdyna.git) to trajectories recognizable to the GNS (`utils/prepare.eqdyna.4gns.py`, `utils/prepare.fractal.stress.eqdyna.4gns.py`).
+ 3. A `node_property` channel carrying scalar initial-stress conditions per node, and an extra node type for high-stress asperities.
+ 4. Postprocessing rendering and analysis of earthquake rupture dynamics (`meshnet/render.py`, `utils/plot.rupture.dynamics.py`).
+ 5. Batch and scenario-sweep rollout drivers with cached graph construction for faster inference (`meshnet/batch_rollout.py`, `scenario.rollout.py`).
 
 Earthquake examples:
 
@@ -19,6 +24,36 @@ Earthquake examples:
 </p>
 
 > GNS prediction of multi-asperity prestress rupture at 3 million trained steps.
+
+## How to cite
+
+If you use EQGNS, please cite the paper and the archived software:
+
+- Liu, D., & Becker, T. W. (2025). Earthquake rupture dynamics from graph neural networks. *Journal of Geophysical Research: Solid Earth*, 130. https://doi.org/10.1029/2025JB031981
+- Liu, D., & Becker, T. W. (2025). Source code and dataset for research article "Earthquake rupture dynamics from Graph Neural Networks". Zenodo. https://doi.org/10.5281/zenodo.17095311
+
+Please also cite the upstream GNS framework this work builds on:
+
+- Kumar, K., & Vantassel, J. (2023). GNS: A generalizable Graph Neural Network-based simulator for particulate and fluid modeling. *Journal of Open Source Software*, 8(88), 5025. https://doi.org/10.21105/joss.05025
+
+The MeshNet architecture follows MeshGraphNets ([Pfaff et al., 2021](https://arxiv.org/abs/2010.03409)) and the GNS approach follows [Sanchez-Gonzalez et al., 2020](https://arxiv.org/abs/2002.09405).
+
+## EQGNS workflow
+
+The earthquake-specific pipeline, end to end:
+
+1. **Generate training data** with [EQdyna](https://github.com/EQDYNA/EQdyna.git) dynamic rupture simulations.
+2. **Convert to GNS trajectories**: `utils/prepare.eqdyna.4gns.py` (or `utils/prepare.fractal.stress.eqdyna.4gns.py` for fractal prestress) turns EQdyna outputs into `train.npz` / `valid.npz` / `test.npz` plus `metadata.json`. See [docs/data_preparation.md](docs/data_preparation.md).
+3. **Configure the model**: place a `config.json` (copy `meshnet/example.config.json`) under the model path.
+4. **Train**: directly via `python3 -m meshnet.train ...`, via the single-run wrapper `train_cli.py`, or via the hyperparameter-sweep driver `run.process.gns.py`. See [docs/training.md](docs/training.md).
+5. **Rollout**: single rollouts via `meshnet.train --mode=rollout`, sweeps over models/checkpoints via `scenario.rollout.py`, batched inference via `meshnet/batch_rollout.py`. See [docs/rollout_and_analysis.md](docs/rollout_and_analysis.md).
+6. **Render and analyze**: `meshnet/render.py` (gif animations), `utils/plot.rupture.dynamics.py` (rupture-time contours, slip rate, benchmarking against EQdyna ground truth), `utils/plot.loss.curve.py`.
+
+## Reproducing the paper
+
+- The exact code and dataset archived at publication are on Zenodo: https://doi.org/10.5281/zenodo.17095311
+- `meshnet/train.py.published` is a snapshot of `meshnet/train.py` as used for the paper; the current `meshnet/train.py` adds inference-speed optimizations that are mathematically equivalent (see `CLAUDE.md` for details).
+- Environments: `requirements.txt` (unpinned numpy, local servers) vs. `requirements.dl.txt` (pinned `numpy==1.23.1`); the numpy pin is the only intended difference. `gns_env.yml` records a conda environment; `build_venv.sh` / `build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.
 
 ## Introduction
 Graph Network-based Simulator (GNS) is a generalizable, efficient, and accurate machine learning (ML)-based surrogate simulator for particle- and mesh-based physical systems using Graph Neural Networks (GNNs). GNS has shown remarkable generability to simulated fluid, solid, deformables, particle systems with significant speedup comparing to traditional physics-based counterparts. GNS exploits distributed data parallelism to achieve fast multi-GPU training.
@@ -299,7 +334,8 @@ python -m gns.train --data_path=${DATA_PATH} --model_path=${MODEL_PATH} --ntrain
 - to setup a virtualenv
 
 ```shell
-sh ./build_venv.sh
+sh ./build_venv.sh            # local servers
+sh ./build_venv_frontera.sh   # TACC Frontera
 ```
 
 - check tests run sucessfully.
@@ -348,7 +384,9 @@ PyTorch version of Graph Network Simulator and Mesh Graph Network Simulator are 
 ### Acknowledgement
 This code is based upon work supported by the National Science Foundation under Grant OAC-2103937.
 
-### Citation
+### Citation (upstream GNS framework)
+
+See also [How to cite](#how-to-cite) above for the EQGNS-specific citations.
 
 #### Repo
 Kumar, K., & Vantassel, J. (2023). GNS: A generalizable Graph Neural Network-based simulator for particulate and fluid modeling. Journal of Open Source Software, 8(88), 5025. https://doi.org/10.21105/joss.05025

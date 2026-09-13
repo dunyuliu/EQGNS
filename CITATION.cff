@@ -1,16 +1,28 @@
 cff-version: "1.2.0"
+title: "EQGNS: Earthquake rupture dynamics from Graph Neural Networks"
 authors:
-- family-names: Kumar
-  given-names: Krishna
-  orcid: "https://orcid.org/0000-0003-2144-5562"
-- family-names: Vantassel
-  given-names: Joseph
-  orcid: "https://orcid.org/0000-0002-1601-3354"
-doi: 10.5281/zenodo.8249813
-message: If you use this software, please cite our article in the
-  Journal of Open Source Software.
+- family-names: Liu
+  given-names: Dunyu
+- family-names: Becker
+  given-names: Thorsten W.
+doi: 10.5281/zenodo.17095311
+message: If you use this software, please cite our article in JGR Solid
+  Earth, the archived software, and the upstream GNS framework (see
+  references).
 preferred-citation:
   authors:
+  - family-names: Liu
+    given-names: Dunyu
+  - family-names: Becker
+    given-names: Thorsten W.
+  doi: 10.1029/2025JB031981
+  journal: "Journal of Geophysical Research: Solid Earth"
+  title: "Earthquake Rupture Dynamics From Graph Neural Networks"
+  type: article
+  volume: 130
+  year: 2025
+references:
+- authors:
   - family-names: Kumar
     given-names: Krishna
     orcid: "https://orcid.org/0000-0003-2144-5562"
@@ -30,5 +42,3 @@ preferred-citation:
   type: article
   url: "https://joss.theoj.org/papers/10.21105/joss.05025"
   volume: 8
-title: "GNS: A generalizable Graph Neural Network-based simulator for
-  particulate and fluid modeling"
