@@ -1,0 +1,17 @@
+{
+  "_derivation": "Derived 2026-09-24 by running the M1 rollout FOUR times with CURRENT meshnet/train.py (same checkpoint model-3000000.pt, same test.npz, GPU 0, A100-SXM4-40GB, torch 2.6.0+cu124) and measuring the per-metric spread across the 6 trajectories. A first pass with only 2 runs (spread ~4e-4 on mse_raw) produced a tolerance that a 3rd/4th run then broke on trajectory rollout_4: its mse_raw across 4 independent current-code runs was 0.52456, 0.52498, 0.52719, 0.53114 -- monotonically increasing, spread 0.00658, i.e. this trajectory's autoregressive rollout is measurably more sensitive to GPU-kernel nondeterminism than the other 5 (826 autoregressive steps amplifying tiny floating-point differences -- consistent with the earthquake-rupture dynamics being genuinely chaotic near a rupture/no-rupture threshold, not obviously a bug, but the *monotonic* trend across sequential runs -- rather than IID scatter -- is flagged as an open question for lars-eriksson/kai-fischer, see NOTES_tier1.md/README.md). Rule: tolerance = max(MARGIN * observed_max_spread_over_4_runs, floor). MARGIN=3 (not the minimum 2x) is used for mse_raw/mse_vx specifically because of that unresolved monotonic-drift anomaly; other metrics use MARGIN=2. Floors are chosen well below the smallest real regression signal seen in the baseline data (false-positive counts move by hundreds/thousands under real changes; MSE differs by >0.01 between distinct trajectories) so a genuine break cannot hide inside the tolerance.",
+  "observed_max_spread_over_4_runs": {
+    "mse_raw": 0.006582766995605671,
+    "mse_vx": 0.013165533990326495,
+    "mse_vy": 3.5727383108289714e-12,
+    "rupture_time_rmse": 3.857188081596297e-05,
+    "rupture_time_missed_count": 0,
+    "rupture_time_false_count": 0
+  },
+  "mse_raw": 0.02,
+  "mse_vx": 0.04,
+  "mse_vy": 0.0001,
+  "rupture_time_rmse": 0.001,
+  "rupture_time_missed_count": 2,
+  "rupture_time_false_count": 2
+}

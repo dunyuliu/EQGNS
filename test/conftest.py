@@ -38,3 +38,18 @@ def pytest_configure(config):
         "markers", "physical: physical-behaviour / invariant test")
     config.addinivalue_line(
         "markers", "slow: not required for the fast local loop, but always run in CI")
+    config.addinivalue_line(
+        "markers",
+        "paper_parity: full paper-parity rollout gate (tiers 1+4) against "
+        "gns-sample/ (249GB, real published checkpoints/rollouts). Not run "
+        "by default even in CI -- requires gns-sample/ locally and an "
+        "explicit `-m paper_parity` selection. See test/paper_parity/README.md.")
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--paper-parity", action="store_true", default=False,
+        help="Opt in to running the paper-parity gate tests (test/paper_parity/). "
+             "Requires gns-sample/ to be symlinked in locally; see "
+             "test/paper_parity/README.md. Ignored unless combined with "
+             "`-m paper_parity` or running test/paper_parity/ directly.")

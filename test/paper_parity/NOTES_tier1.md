@@ -24,10 +24,55 @@ All anchor paths given in the mission matched exactly (no discrepancy):
   setup); predicted vy is a small near-zero residual (~1e-5 std). This is physically
   expected, not a code defect.
 
-## Next steps (see later entries for progress)
-- [ ] build run_gate.py (re-run rollout with current meshnet/train.py, diff vs baseline)
-- [ ] measure GPU-nondeterminism tolerance via M1 double-run
-- [ ] full gate run M1/M2/M3
-- [ ] pytest wrapper + conftest marker
-- [ ] README.md
-- [ ] zenodo_hash_check.py
+## run_gate.py
+- Built; invokes documented `python3 -m meshnet.train --mode=rollout ...` exactly
+  (see docs/rollout_and_analysis.md), diffs per-trajectory metrics vs baseline JSON.
+- Bug found and fixed during mutation-testing: original `diff_trajectory()` computed
+  `ok = not (diff > allowed)`, which silently PASSES on NaN (IEEE-754 NaN comparisons
+  are always False, and De Morgan's law does not hold across a NaN gap). Fixed to the
+  direct comparison `ok = (diff <= allowed)`, which correctly fails on NaN. Verified via
+  a 3-case mutation check (small perturbation still passes, `+0.07` mse and
+  `2477->50` false_count mutations still fail, NaN now fails instead of silently passing).
+
+## Tolerance derivation
+- First pass (2 M1 double-runs) gave tolerance too tight -- a 3rd independent run of the
+  SAME code+checkpoint broke it on `rollout_4` (mse_raw diff 0.00295 > tol 0.001).
+- Ran M1 4 times total. `rollout_4` mse_raw across the 4 runs: 0.52456, 0.52498, 0.52719,
+  0.53114 -- monotonically increasing, spread 6.58e-3 (13x the naive 2-run estimate).
+  Flagged as an open question (unresolved monotonic drift, not obviously a bug -- possibly
+  chaos amplification of GPU kernel nondeterminism over 826 autoregressive steps, concentrated
+  on the trajectory with the highest baseline false_count=2477, i.e. a borderline rupture case).
+- Final tolerance: `tolerance.json`, `MARGIN=3` for mse_raw/mse_vx (extra margin for the
+  drift anomaly), `MARGIN=2` elsewhere, floors added. See README.md for full table.
+
+## Full gate run (2026-09-24, A100-SXM4-40GB x3 in parallel, one GPU per model)
+- M1: PASS, 217.9s wall-clock, all 6 trajectories within tolerance.
+- M2: FAIL, 317.2s wall-clock, `rollout_7` exceeds tolerance on mse_raw/mse_vx. Confirmed
+  via an independent 3rd run (baseline 0.391, gate-run 0.428, 3rd run 0.396) that this is
+  the same chaos/nondeterminism phenomenon as M1's rollout_4, not a regression.
+- M3: FAIL, 403.2s wall-clock, 5/15 trajectories exceed tolerance (up to a 6x mse_raw swing
+  on rollout_3). Consistent with the provenance-unconfirmed dataset having more chaos-
+  sensitive trajectories. NOT investigated further to a root cause in this PR (out of scope
+  per mission: report honestly, don't force a pass by loosening tolerance further, since a
+  tolerance wide enough to absorb a 6x MSE swing would make the gate unable to catch real
+  regressions of similar size).
+- Did NOT loosen tolerance further to force M2/M3 to PASS. See README.md "Known limitation".
+
+## pytest wrapper
+- test_paper_parity.py added; `@pytest.mark.paper_parity` registered in test/conftest.py,
+  plus a `--paper-parity` opt-in flag (also added to conftest.py's pytest_addoption).
+  Verified `pytest test/ -q` still shows `43 passed, 3 skipped` (no change to the original
+  43-test suite; the 3 new skips are the M1/M2/M3 paper_parity tests, each skipping with an
+  explicit, printed reason -- never silent).
+
+## Zenodo cross-check
+- zenodo_hash_check.py: network call to Zenodo API succeeded (15-file manifest fetched).
+  BLOCKED beyond that: Zenodo exposes MD5 of packed zip archives, not sha256 of the
+  extracted model.pt/test.npz files our baselines hash; a real diff needs 10.33 GB
+  downloaded+unzipped+rehashed. Measured throughput from this environment: 389.2 KB/s
+  (20MB range-request sample) -> ~7.4h ETA, judged impractical for this session.
+  See ZENODO_CROSS_CHECK.md for full reasoning and how to unblock later.
+
+## Status: all deliverables complete for this session.
+Remaining flagged items are explicitly deferred (not silently dropped): see README.md
+"Known limitation" and "Recommended follow-up".
