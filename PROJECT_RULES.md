@@ -1,0 +1,149 @@
+# PROJECT_RULES.md — EQGNS
+
+Rule book for `dunyuliu/EQGNS` (fork of `geoelements/gns`, upstream remote),
+published as Liu & Becker (2025), *Earthquake Rupture Dynamics From Graph
+Neural Networks*, JGR Solid Earth, doi:10.1029/2025JB031981, archived at
+Zenodo doi:10.5281/zenodo.17095311. The repo is now in post-publication
+maintenance + new-experiment mode.
+
+## Index
+1. Published-paper state is frozen
+2. Citation surfaces stay intact
+3. Large/raw data directories never get committed
+4. Experiments are isolated in `work.*`
+5. Docs must match the drivers they document
+6. Remotes and commit style
+7. Rupture-analysis conventions are stated explicitly
+8. `requirements.txt` vs `requirements.dl.txt` differ only in the numpy pin
+
+---
+
+## 1. Published-paper state is frozen
+
+`meshnet/train.py.published` is the exact snapshot of `train.py` used to
+produce the paper's results. It is never edited. The current
+`meshnet/train.py` may add inference-speed optimizations (rollout path only)
+but must stay mathematically equivalent for training to the published
+version — the `train()` and `validation()` functions are not to change
+behavior. Tag `v1.0-jgr2025` marks the commit corresponding to the Zenodo
+archive; the Zenodo archive (doi:10.5281/zenodo.17095311), not the current
+`main`, is the authoritative record of "what produced the paper."
+
+**Rationale**: a paper's results must remain reproducible from a fixed
+snapshot indefinitely, independent of later maintenance on `main`.
+
+**How to apply**: any PR touching `meshnet/train.py` states whether it
+changes `train()`/`validation()` (forbidden without a version bump and
+explicit note) or only `rollout()` (the sanctioned optimization surface, see
+`/home/utig5/dliu/eq_rupture_gns/CLAUDE.md`). Never edit
+`meshnet/train.py.published`.
+
+## 2. Citation surfaces stay intact
+
+`README.md`'s "How to cite" section lists, in order: the JGR paper, the
+Zenodo software DOI, and the upstream Kumar & Vantassel (2023) JOSS paper.
+`CITATION.cff` carries the JOSS paper as a `references:` entry alongside the
+`preferred-citation` for the JGR paper. Any edit to `README.md` or
+`CITATION.cff` must leave all three citations present and consistent with
+each other.
+
+**Rationale**: this is a fork of published, credited upstream work; dropping
+a citation on an edit is silent plagiarism-by-omission.
+
+**How to apply**: before merging a README or CITATION.cff change, grep both
+files for `10.1029/2025JB031981`, `10.5281/zenodo.17095311`, and
+`10.21105/joss.05025` — all three must still appear in each file where they
+appeared before.
+
+## 3. Large/raw data directories never get committed
+
+`gns-sample/` (249GB), `work.test/`, `dataset_archive/`, `model/`, `venv*/`,
+`misc/` are gitignored and stay that way. Raw datasets under these paths are
+read-only inputs to experiments — nothing writes through them in place.
+
+**Rationale**: multi-hundred-GB directories and generated model artifacts do
+not belong in git history; treating raw data as read-only prevents an
+experiment from silently corrupting the ground truth another experiment
+depends on.
+
+**How to apply**: `git check-ignore -v gns-sample work.test dataset_archive
+model venv venv_cotopaxi misc` must report each as ignored; `git status
+--porcelain` must never list a file under these paths as untracked-to-add.
+
+## 4. Experiments are isolated in `work.*`
+
+New/exploratory code lives in git-ignored `work.*` directories (e.g.
+`work.cnn/`), excluded via `.gitignore` or `.git/info/exclude`. Experimental
+code never lands in `gns/` or `meshnet/` until it is proven and consciously
+merged as a reviewed change. `work.cnn/` carries its own `PROJECT_RULES.md`
+scoped to that experiment — this rule book does not edit or govern its
+contents.
+
+**Rationale**: keeps `gns/` and `meshnet/` — the paper-adjacent, load-bearing
+code — free of half-finished experimental branches.
+
+**How to apply**: `git ls-files work.cnn work.test 2>/dev/null` should be
+empty (both are ignored, not tracked); a change touching `gns/` or `meshnet/`
+that originated in a `work.*` directory names the experiment it was promoted
+from in the commit body.
+
+## 5. Docs must match the drivers they document
+
+`docs/data_preparation.md`, `docs/training.md`, and
+`docs/rollout_and_analysis.md` document the actual entry points:
+`train_cli.py`, `run.process.gns.py`, `scenario.rollout.py`, and
+`meshnet/batch_rollout.py`. A doc's claimed flags, defaults, and file outputs
+must match those scripts as they exist today.
+
+**Rationale**: spec-drift between docs and drivers is exactly the failure
+mode that costs the most time to a returning user or a fresh agent.
+
+**How to apply**: when any of the four drivers above changes its CLI flags,
+defaults, or output filenames, the corresponding doc changes in the same
+commit. An audit greps each doc for `--flag` style references and diffs them
+against `argparse`/`click` definitions in the named script.
+
+## 6. Remotes and commit style
+
+`origin` = `dunyuliu/EQGNS`, `upstream` = `geoelements/gns`. Commits use a
+short imperative subject line (e.g. "Add rollout caching", not "Added" or
+"Adding"). Author is Dunyu Liu (dl27583@eid.utexas.edu).
+
+**Rationale**: keeps history skimmable and keeps fork/upstream sync
+unambiguous when pulling from `upstream`.
+
+**How to apply**: `git remote -v` shows exactly these two remotes at these
+URLs; `git log --oneline -20` subjects read as imperative commands.
+
+## 7. Rupture-analysis conventions are stated explicitly
+
+`utils/plot.rupture.dynamics.py` fixes: `SLIPRATE_THRESHOLD=0.1` m/s for
+rupture-time plots, `get_rupture_time(threshold=0.001)` for SCEC benchmark
+comparison files, `dt=1/60` s, and a `+1.2` s time offset. These are not
+universal constants — they are this script's calibrated choices. Any new
+analysis script that computes a rupture time, slip rate, or aligns two time
+series must state, in a comment or docstring, which of these conventions
+(or which alternative, and why) it uses.
+
+**Rationale**: two rupture-time definitions silently mixed across scripts
+produce numbers that look comparable and are not (starter invariant 5: one
+calibrated definition of "pass").
+
+**How to apply**: grep a new analysis script for `threshold=`, `dt=`, and any
+time-offset constant; if a rupture-time or slip-rate calculation appears
+with none of these named, it is a Tier-2 finding routed to whoever owns that
+script.
+
+## 8. `requirements.txt` vs `requirements.dl.txt` differ only in the numpy pin
+
+`requirements.txt` leaves numpy unpinned (local servers); `requirements.dl.txt`
+pins `numpy==1.23.1`. This is the only intended difference between the two
+files.
+
+**Rationale**: two requirements files that silently diverge on more than the
+one documented axis make it unclear which environment a bug report came
+from.
+
+**How to apply**: `diff requirements.txt requirements.dl.txt` — every line of
+the diff must be the numpy pin (or trailing-newline noise); any other diff
+line is a Tier-1 violation and gets documented here or reverted.
