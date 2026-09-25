@@ -1,0 +1,90 @@
+{
+  "model_key": "M1",
+  "provenance": "published",
+  "published_rollout_dir": "/home/utig5/dliu/eqgns-worktrees/tier1-parity/gns-sample/case3.200m.homo.a.Vw/rollouts.nmp10.cotopaxi/model-3000000.pt",
+  "checkpoint_path": "/home/utig5/dliu/eqgns-worktrees/tier1-parity/gns-sample/case3.200m.homo.a.Vw/models.nmp10.cotopaxi/model-3000000.pt",
+  "checkpoint_sha256": "e0f97a34ab08e0add1e8d2e979999a8e7445c0fa8f60250c13ae4ba49f75f440",
+  "test_npz_path": "/home/utig5/dliu/eqgns-worktrees/tier1-parity/gns-sample/case3.200m.homo.a.Vw/dataset/test.npz",
+  "test_npz_sha256": "cfa8710b103f01eb16cde67c306028e67a6102f709f327a609937b42759cb617",
+  "n_trajectories": 6,
+  "trajectories": [
+    {
+      "mse_raw": 0.06123652555526354,
+      "mse_vx": 0.12247305092241402,
+      "mse_vy": 1.8811300076117065e-10,
+      "rupture_time_rmse": 0.04019738323315954,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4743,
+      "pkl_file": "rollout_0.pkl",
+      "mean_loss_reported": 0.06123652309179306,
+      "mean_acc_loss_reported": 1.7872607707977295
+    },
+    {
+      "mse_raw": 0.09917990552914532,
+      "mse_vx": 0.19835981084446644,
+      "mse_vy": 2.1382338566841596e-10,
+      "rupture_time_rmse": 0.06356456708434204,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 8,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4735,
+      "pkl_file": "rollout_1.pkl",
+      "mean_loss_reported": 0.09917990118265152,
+      "mean_acc_loss_reported": 2.8946828842163086
+    },
+    {
+      "mse_raw": 0.3320650683722942,
+      "mse_vx": 0.6641301365070625,
+      "mse_vy": 2.375255148542446e-10,
+      "rupture_time_rmse": 0.4692876330144116,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4743,
+      "pkl_file": "rollout_2.pkl",
+      "mean_loss_reported": 0.33206504583358765,
+      "mean_acc_loss_reported": 9.69171142578125
+    },
+    {
+      "mse_raw": 0.4132241993507762,
+      "mse_vx": 0.8264483984824275,
+      "mse_vy": 2.1912465353454066e-10,
+      "rupture_time_rmse": 1.2572373355382964,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 2104,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 2639,
+      "pkl_file": "rollout_3.pkl",
+      "mean_loss_reported": 0.41322416067123413,
+      "mean_acc_loss_reported": 12.060437202453613
+    },
+    {
+      "mse_raw": 0.5301415271602635,
+      "mse_vx": 1.0602830540787087,
+      "mse_vy": 2.418189277828038e-10,
+      "rupture_time_rmse": 0.23698543020904736,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 2477,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 2266,
+      "pkl_file": "rollout_4.pkl",
+      "mean_loss_reported": 0.5301415324211121,
+      "mean_acc_loss_reported": 15.472807884216309
+    },
+    {
+      "mse_raw": 0.05551834811987359,
+      "mse_vx": 0.11103669604912123,
+      "mse_vy": 1.9062579279147455e-10,
+      "rupture_time_rmse": 0.04360590842994685,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4743,
+      "pkl_file": "rollout_5.pkl",
+      "mean_loss_reported": 0.055518344044685364,
+      "mean_acc_loss_reported": 1.6203689575195312
+    }
+  ]
+}
