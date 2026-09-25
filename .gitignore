@@ -158,3 +158,4 @@ venv/
 venv_cotopaxi/
 misc/
 resume_claude.sh
+test/convergence_gate/history/

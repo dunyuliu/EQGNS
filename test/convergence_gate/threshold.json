@@ -1,0 +1,4 @@
+{
+  "final_mean_loss_max": 7.5,
+  "_calibration_note": "Calibrated 2026-09-24 on CPU, TINY_CONFIG synth dataset (test/fixtures/meshnet/synth.py), seed=20260101, nsteps=2000, timesteps=64: observed head_mean_loss=6.339, tail_mean_loss=6.051 (see test/convergence_gate/history/run_2026-09-25T021553.689063+0000.json). 7.5 gives ~25% margin above the observed tail loss so ordinary seeded noise doesn't false-positive the gate, while still catching a genuine failure-to-learn (loss stuck near or above the head_mean_loss, or diverging). Re-calibrate if TINY_CONFIG/synth.py changes shape or seed."
+}
