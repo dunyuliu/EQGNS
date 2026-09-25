@@ -23,6 +23,7 @@ a tiny synthetic dataset built on the fly by
 | 2. Integration | `integration` | `test_meshnet_integration_train_rollout.py` | real `SamplesDataset` -> `FaceToEdge`/`Cartesian`/`Distance` transformer -> `predict_acceleration` -> backward -> `optimizer.step()`; checkpoint save -> fresh simulator -> `load()` -> identical predictions; `meshnet.train.rollout()` on a `TrajectoriesDataset` example |
 | 3. End-to-end | `e2e`, `slow` | `test_meshnet_e2e_golden.py` | the real CLI (`python3 -m meshnet.train`, via a seeded wrapper) run `--mode=train` then `--mode=rollout` on a tiny deterministic dataset, diffed against a committed golden file |
 | 4. Physical-behaviour | `physical` | `test_meshnet_physical.py` | additive-acceleration identity through a real graph, zero-forcing -> zero-response asymptotic limit (mutation-verified to actually depend on the weights, not just the untrained normalizer floor), velocity-noise std vs `noise_std` |
+| 5. Refactor gating (A/B) | `e2e`, `slow` | `test_ab_seeded_determinism.py` | same seeded config run twice via the real CLI, each importing `meshnet`/`gns` from a separate directory tree; asserts per-step train/valid loss sequences are bit-identical -- see `docs/refactor_gating.md` for how to point it at a candidate refactor worktree |
 
 ## Running
 
@@ -50,10 +51,12 @@ test/` -- the `slow` marker is for skipping locally, not for skipping in
 CI (see the pattern of `not compute_loss=False`-style opt-outs
 documented in `CLAUDE.md`: convenient locally, never the CI default).
 
-Total measured runtime of the full `test/` suite (43 tests, single CPU
-thread, this repo's `venv`): ~16s, of which ~13s is the two `python3 -m
-meshnet.train` subprocess launches in the e2e tier (import + torch/PyG
-startup dominates, not the tiny model itself).
+Total measured runtime of the full `test/` suite (44 tests, single CPU
+thread, this repo's `venv`): ~33s (up from ~24s before the A/B tier was
+added), of which the bulk is the four `python3 -m meshnet.train`/
+`--mode=rollout` subprocess launches across the e2e tier and the new
+A/B refactor-gating tier (import + torch/PyG startup dominates each
+launch at ~8s, not the tiny model itself).
 
 ## The golden file (tier 3)
 
