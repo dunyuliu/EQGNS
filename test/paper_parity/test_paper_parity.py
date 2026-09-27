@@ -20,7 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from common import ALL_REGISTRY, gns_sample_available  # noqa: E402
-from run_gate import diff_trajectory, load_tolerance, run_gate_for_model  # noqa: E402
+from run_gate import (  # noqa: E402
+    diff_trajectory, load_per_trajectory_tolerance, load_tolerance, run_gate_for_model)
 
 HERE = Path(__file__).resolve().parent
 
@@ -83,9 +84,10 @@ def test_paper_parity_gate(request, model_key, tmp_path):
             f"first. This is a missing-fixture condition, not a code failure.")
 
     tol = load_tolerance()
-    ok, rows, elapsed = run_gate_for_model(model_key, tol, tmp_path)
+    per_traj = load_per_trajectory_tolerance()
+    ok, rows, elapsed = run_gate_for_model(model_key, tol, tmp_path, per_traj=per_traj)
 
-    failures = [(pkl, diffs) for pkl, traj_ok, diffs in rows if not traj_ok]
+    failures = [(pkl, diffs) for pkl, traj_ok, diffs, _source in rows if not traj_ok]
     if failures:
         lines = [f"{model_key} paper-parity gate FAILED for {len(failures)}/{len(rows)} trajectories "
                  f"(wall-clock {elapsed:.1f}s):"]

@@ -41,6 +41,7 @@ from common import ALL_REGISTRY, gns_sample_available, load_pkl, model_paths, pe
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 DEFAULT_TOLERANCE_PATH = HERE / "tolerance.json"
+DEFAULT_PER_TRAJECTORY_TOLERANCE_PATH = HERE / "per_trajectory_tolerance.json"
 
 
 def run_current_rollout(model_key: str, output_dir: Path, cuda_device=None):
@@ -101,6 +102,41 @@ def load_tolerance(path: Path = DEFAULT_TOLERANCE_PATH) -> dict:
         return json.load(f)
 
 
+def load_per_trajectory_tolerance(path: Path = DEFAULT_PER_TRAJECTORY_TOLERANCE_PATH) -> dict:
+    """Per-trajectory tolerance (PR #3), derived by
+    generate_per_trajectory_tolerance.py from >=5-repeat-run spread
+    measurements (see test/paper_parity/measure_spread.py,
+    test/paper_parity/README.md 'Per-trajectory tolerance').
+
+    Only covers model keys/trajectories that were actually measured this
+    session (currently M1, M3). Returns {} (never raises) if the file is
+    absent -- callers MUST fall back to the single global `tolerance.json`
+    for any (model_key, pkl_file) not present here, and that fallback is
+    the documented, honest behaviour, not a silent gap: see
+    `tolerance_for()`.
+    """
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        return json.load(f)
+
+
+def tolerance_for(model_key: str, pkl_file: str, global_tol: dict, per_traj: dict) -> tuple[dict, str]:
+    """Return (tolerance_dict, source) for one trajectory.
+
+    Prefers the per-trajectory tolerance (tighter for stable trajectories,
+    wider for measured-chaotic ones) when this exact (model_key, pkl_file)
+    was measured; otherwise falls back to the single global tolerance and
+    says so explicitly (source == "global-fallback") so a gate run's output
+    never silently claims per-trajectory precision it doesn't have.
+    """
+    model_entry = per_traj.get(model_key)
+    if model_entry and pkl_file in model_entry:
+        row = model_entry[pkl_file]
+        return ({k: row[k] for k in NUMERIC_KEYS + COUNT_KEYS}, "per-trajectory")
+    return (global_tol, "global-fallback")
+
+
 def diff_trajectory(baseline: dict, current: dict, tol: dict) -> dict:
     """Return {metric: (ok, baseline_val, current_val, abs_diff, allowed)}.
 
@@ -130,7 +166,8 @@ def diff_trajectory(baseline: dict, current: dict, tol: dict) -> dict:
     return out
 
 
-def run_gate_for_model(model_key: str, tol: dict, work_root: Path, cuda_device=None) -> tuple[bool, list, float]:
+def run_gate_for_model(model_key: str, tol: dict, work_root: Path, cuda_device=None,
+                        per_traj: dict | None = None) -> tuple[bool, list, float]:
     paths = model_paths(model_key)
     if paths["provenance"] != "published":
         print(f"\n{'!'*70}\nWARNING: model {model_key} baseline provenance is "
@@ -154,6 +191,7 @@ def run_gate_for_model(model_key: str, tol: dict, work_root: Path, cuda_device=N
             f"[{model_key}] trajectory count mismatch: baseline has "
             f"{len(baseline_trajectories)}, current run produced {len(current_trajectories)}")
 
+    per_traj = per_traj or {}
     all_ok = True
     rows = []
     for b_traj, c_traj in zip(baseline_trajectories, current_trajectories):
@@ -161,23 +199,24 @@ def run_gate_for_model(model_key: str, tol: dict, work_root: Path, cuda_device=N
             raise RuntimeError(
                 f"[{model_key}] pkl ordering mismatch: baseline {b_traj['pkl_file']} "
                 f"vs current {c_traj['pkl_file']}")
-        diffs = diff_trajectory(b_traj, c_traj, tol)
+        this_tol, tol_source = tolerance_for(model_key, b_traj["pkl_file"], tol, per_traj)
+        diffs = diff_trajectory(b_traj, c_traj, this_tol)
         traj_ok = all(v[0] for v in diffs.values())
         all_ok = all_ok and traj_ok
-        rows.append((b_traj["pkl_file"], traj_ok, diffs))
+        rows.append((b_traj["pkl_file"], traj_ok, diffs, tol_source))
 
     return all_ok, rows, elapsed
 
 
 def print_table(model_key: str, rows):
     print(f"\n=== {model_key} paper-parity gate: per-trajectory results ===")
-    header = f"{'traj':<16}{'status':<8}"
+    header = f"{'traj':<16}{'status':<8}{'tol_source':<18}"
     for key in NUMERIC_KEYS + COUNT_KEYS:
         header += f"{key:<28}"
     print(header)
-    for pkl_file, traj_ok, diffs in rows:
+    for pkl_file, traj_ok, diffs, tol_source in rows:
         status = "PASS" if traj_ok else "FAIL"
-        line = f"{pkl_file:<16}{status:<8}"
+        line = f"{pkl_file:<16}{status:<8}{tol_source:<18}"
         for key in NUMERIC_KEYS + COUNT_KEYS:
             ok, b, c, diff, allowed = diffs[key]
             mark = "" if ok else "*"
@@ -192,6 +231,11 @@ def main():
     ap.add_argument("--work-dir", type=Path, default=Path("/tmp/paper_parity_gate_output"),
                      help="Scratch dir for re-run rollout pkls (not committed).")
     ap.add_argument("--tolerance", type=Path, default=DEFAULT_TOLERANCE_PATH)
+    ap.add_argument("--per-trajectory-tolerance", type=Path,
+                     default=DEFAULT_PER_TRAJECTORY_TOLERANCE_PATH,
+                     help="Per-trajectory tolerance (PR #3); falls back to --tolerance for "
+                          "any (model, trajectory) not covered. Pass a nonexistent path to "
+                          "disable and use only the global tolerance.")
     args = ap.parse_args()
 
     if not gns_sample_available():
@@ -200,12 +244,14 @@ def main():
         sys.exit(2)
 
     tol = load_tolerance(args.tolerance)
+    per_traj = load_per_trajectory_tolerance(args.per_trajectory_tolerance)
     keys = list(ALL_REGISTRY) if args.model == "all" else [args.model]
 
     overall_ok = True
     total_elapsed = 0.0
     for key in keys:
-        ok, rows, elapsed = run_gate_for_model(key, tol, args.work_dir, cuda_device=args.cuda_device)
+        ok, rows, elapsed = run_gate_for_model(key, tol, args.work_dir, cuda_device=args.cuda_device,
+                                                per_traj=per_traj)
         total_elapsed += elapsed
         print_table(key, rows)
         print(f"[{key}] rollout wall-clock: {elapsed:.1f}s, gate: {'PASS' if ok else 'FAIL'}")
