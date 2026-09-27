@@ -141,7 +141,38 @@ MODEL_REGISTRY = {
             GNS_SAMPLE / "case3.200m.homo.a.Vw" / "rollouts.nmp10.cotopaxi" / "model-3000000.pt"),
         "provenance": "published",
     },
+    # Paper's M2 (Liu & Becker 2025, sec 2.4): trained on D2/30-scenario
+    # (asperity 35/55 MPa only), case4.200m.multi.stress.homo.a.Vw. This
+    # registry entry gates that checkpoint applied to the D3 fractal-stress
+    # test set (owner-confirmed 2026-09-27; the checkpoint at
+    # models.nmp10.cotopaxi.r1/model-2900000.pt is byte-identical, md5
+    # 48d0e2b9, whether read from case4.200m.fractal.stress.homo.a.Vw/ or
+    # case4.200m.multi.stress.homo.a.Vw/ -- the fractal directory is a
+    # test-set copy of the same trained model, not a separate training run).
+    # This was PREVIOUSLY mislabeled "M3" in this registry -- see
+    # NOTES_tier1.md / PR #1 fix.
+    # NOTE: this gates M2-on-D3, NOT M2's own paper-parity test (D2). Gating
+    # M2 against its own D2 test set is out of scope for this PR -- see
+    # PR #2 (test-coverage matrix, PATHWAY_FORWARD.md).
     "M2": {
+        "working_dir": GNS_SAMPLE / "case4.200m.fractal.stress.homo.a.Vw",
+        "model_dir": (
+            GNS_SAMPLE / "case4.200m.fractal.stress.homo.a.Vw" / "models.nmp10.cotopaxi.r1"),
+        "model_step": 2900000,
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case4.200m.fractal.stress.homo.a.Vw"
+            / "rollouts.nmp10.cotopaxi.r1" / "model-2900000.pt"),
+        # No `.published` rollout dir exists under the fractal directory for
+        # this checkpoint -- default per mission mandate. DO NOT treat this
+        # baseline as a trusted paper-parity oracle.
+        "provenance": "unconfirmed",
+    },
+    # Paper's M3 (Liu & Becker 2025, sec 2.4): trained on D2/148-scenario
+    # (all four asperity levels, lr 3e-5, batch 8), picked @2.7M, on its own
+    # D2 test set -- case4.200m.multi.stress.160scenarios.homo.a.Vw. This
+    # was PREVIOUSLY mislabeled "M2" in this registry -- see NOTES_tier1.md /
+    # PR #1 fix.
+    "M3": {
         "working_dir": GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw",
         "model_dir": (
             GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw"
@@ -151,18 +182,6 @@ MODEL_REGISTRY = {
             GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw"
             / "rollouts.nmp10.lr3e-5.b8.cotopaxi.r1.published" / "model-2700000.pt"),
         "provenance": "published",
-    },
-    "M3": {
-        "working_dir": GNS_SAMPLE / "case4.200m.fractal.stress.homo.a.Vw",
-        "model_dir": (
-            GNS_SAMPLE / "case4.200m.fractal.stress.homo.a.Vw" / "models.nmp10.cotopaxi.r1"),
-        "model_step": 2900000,
-        "published_rollout_dir": (
-            GNS_SAMPLE / "case4.200m.fractal.stress.homo.a.Vw"
-            / "rollouts.nmp10.cotopaxi.r1" / "model-2900000.pt"),
-        # No `.published` rollout dir exists for M3 -- default per mission mandate.
-        # DO NOT treat this baseline as a trusted paper-parity oracle.
-        "provenance": "unconfirmed",
     },
 }
 

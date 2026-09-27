@@ -72,12 +72,24 @@ over 826 steps -- most of the physical grounding for this is that
 `rollout_4` already has an anomalously high `false_count` (2477) in the
 baseline, i.e. it's a borderline/marginal rupture case where tiny
 perturbations flip many nodes across the 0.1 m/s threshold. Confirmed the
-same phenomenon independently on M2 (`rollout_7`: baseline 0.391, gate-run
+same phenomenon independently on M3 (`rollout_7`: baseline 0.391, gate-run
 0.428, a third run 0.396 -- spread ~0.037, again concentrated in one
-trajectory) and, much more severely, on M3 (5 of 15 trajectories moved by
+trajectory) and, much more severely, on M2 (5 of 15 trajectories moved by
 O(0.1)-O(1) in `mse_raw`, up to a 6x change on `rollout_3`) -- consistent
 with chaotic sensitivity being more prevalent in the (provenance-
-unconfirmed) M3 dataset.
+unconfirmed) M2-on-D3 dataset.
+
+**2026-09-27 label correction (PR #1):** the registry entries under keys
+`"M2"`/`"M3"` in `common.py` were swapped to match the owner-confirmed
+paper mapping (Liu & Becker 2025 sec 2.4): what this gate now calls `M2` is
+the paper's M2 checkpoint (D2/30-scenario, `case4.200m.multi.stress.homo.a.Vw`)
+applied to the D3 fractal test set -- NOT M2's own paper-parity test, which
+is out of scope until PR #2. What this gate now calls `M3` is the paper's
+M3 checkpoint (D2/148-scenario, lr3e-5.b8, picked @2.7M) on its own D2 test
+set, `published` provenance. The wall-clock/tolerance numbers below were
+measured under the OLD (mislabeled) key names and are reproduced verbatim
+with the labels corrected; the underlying rollout runs and data are
+unchanged.
 
 **Chosen tolerance** = `max(MARGIN * observed_max_spread_over_4_runs,
 floor)`, with `MARGIN=3` (not the minimum 2x) for `mse_raw`/`mse_vx`
@@ -106,12 +118,21 @@ incorrectly reports "pass" on NaN; the direct form correctly fails).
 
 The gate as built diffs *every* trajectory against a *single* fixed
 tolerance. Given the chaos evidence above, a small subset of trajectories
-(observed: 1/6 for M1, 1/15 for M2, 5/15 for M3) are expected to
+(observed: 1/6 for M1, 1/15 for M3, 5/15 for M2-on-D3) are expected to
 sometimes legitimately exceed even this tolerance purely from GPU
 nondeterminism, with no code regression involved. **This PR reports gate
 results honestly rather than hiding this by inflating the tolerance
-further** (a tolerance wide enough to absorb M3's 1.6-magnitude MSE swing
-would make the gate unable to catch real regressions of similar size).
+further** (a tolerance wide enough to absorb M2-on-D3's 1.6-magnitude MSE
+swing would make the gate unable to catch real regressions of similar
+size). Only M3's `rollout_7` failure has been independently confirmed
+(repeat runs, same checkpoint+data, see above) as GPU nondeterminism
+rather than regression -- the `M3` gate case is marked
+`xfail(strict=True)` in `test_paper_parity.py` for that reason. M1's
+`rollout_4` sensitivity was folded into the tolerance derivation itself
+(MARGIN=3) and M1 currently PASSES outright, so it needs no xfail. The
+M2-on-D3 5/15 failures are NOT confirmed as nondeterminism (no root-cause
+investigation done this session) and are left as genuine, visible FAILs --
+do not xfail an unconfirmed failure.
 Recommended follow-up for a later session: either (a) quantify each
 trajectory's own nondeterminism envelope (more repeat runs) and use a
 per-trajectory tolerance, or (b) separate "stable" vs "chaos-sensitive"
@@ -119,14 +140,16 @@ trajectories and apply a much looser sanity check (order-of-magnitude,
 no NaN/inf, comparable rupture area) to the latter instead of a tight
 numerical diff.
 
-## M3 provenance caveat
+## M2-on-D3 provenance caveat
 
 `case4.200m.fractal.stress.homo.a.Vw/` has **no** `.published` rollout
-directory. `baseline_M3.json["provenance"] == "unconfirmed"` and
-`run_gate.py` prints a loud warning before running M3. A PASS on M3 does
-**not** certify agreement with the published paper result for that model
--- only that current code reproduces *this specific* (unverified-origin)
-rollout run to within tolerance.
+directory. `baseline_M2.json["provenance"] == "unconfirmed"` and
+`run_gate.py` prints a loud warning before running the `M2` key. A PASS on
+`M2` does **not** certify agreement with the published paper result for
+that model on D3 -- only that current code reproduces *this specific*
+(unverified-origin) rollout run to within tolerance. It also does **not**
+cover the paper's own M2 parity test (D2), which this gate does not yet
+exercise (see PR #2).
 
 ## Runtime observed (2026-09-24, A100-SXM4-40GB, one GPU per model, in
 parallel)
@@ -145,11 +168,18 @@ caching) should beat these numbers; this is the baseline to beat.
 
 - **M1**: PASS (0 trajectories exceeded tolerance) with the final
   (4-run-derived) tolerance.
-- **M2**: FAIL -- `rollout_7` exceeds tolerance on `mse_raw`/`mse_vx`
-  (confirmed via a third independent run to be nondeterminism-driven, not
-  a regression -- see "Known limitation" above).
-- **M3**: FAIL -- 5/15 trajectories exceed tolerance, consistent with
-  greater chaotic sensitivity in this (provenance-unconfirmed) dataset.
+- **M3**: FAIL -- 2026-09-24: `rollout_7` exceeded tolerance on
+  `mse_raw`/`mse_vx`; 2026-09-27 fresh re-run: `rollout_7` PASSED but
+  `rollout_2` failed instead, on `rupture_time_rmse` (barely, 0.00140 vs
+  0.001 tol). The failing trajectory/metric MOVING between independent
+  runs of the same checkpoint+data is itself evidence for GPU
+  nondeterminism over a fixed regression -- see NOTES_tier1.md's
+  2026-09-27 addendum. `xfail(strict=True)`.
+- **M2** (on D3 fractal test set): FAIL -- 5/15 trajectories on
+  2026-09-24, 7/15 (different set, larger swings) on the 2026-09-27
+  fresh re-run -- consistent with greater chaotic sensitivity in this
+  (provenance-unconfirmed) dataset, but the root cause is NOT confirmed
+  by a controlled repeat -- left as a genuine, visible FAIL, not xfailed.
 
 None of these FAILs were resolved by loosening the tolerance further in
 this PR; see "Known limitation" for the recommended next step.
