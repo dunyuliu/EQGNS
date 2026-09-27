@@ -27,9 +27,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -42,6 +45,37 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 DEFAULT_TOLERANCE_PATH = HERE / "tolerance.json"
 DEFAULT_PER_TRAJECTORY_TOLERANCE_PATH = HERE / "per_trajectory_tolerance.json"
+
+
+@contextlib.contextmanager
+def dataset_dir_for(paths: dict):
+    """Yield the `--data_path` directory `meshnet.train --mode=rollout`
+    should be pointed at for this model/test-set.
+
+    PR #2 addendum (2026-09-27, M1_small fix): `meshnet/train.py`'s rollout
+    mode always reads the literal filename `{data_path}/test.npz`
+    (train.py:56, hardcoded, not configurable). Most registry entries'
+    real dataset file IS named `test.npz`, so the working_dir/dataset/
+    folder can be used directly. But `case3.200m.homo.a.Vw.others/dataset/`
+    holds MULTIPLE npz files sharing one directory (see common.py's
+    `test_npz_name`), so for those entries (`paths["test_npz_name"] !=
+    "test.npz"`) this builds a THROWAWAY scratch directory (Python
+    `tempfile`, never inside gns-sample, deleted on exit) containing a
+    single symlink named `test.npz` -> the real npz file, and yields that
+    instead -- exactly the "test.npz" name meshnet/train.py demands,
+    without duplicating the (potentially large) npz's bytes and without
+    ever touching gns-sample/. Same non-invasive spirit as the PR #4
+    truncated-tier wrapper (test/fixtures/paper_parity/
+    truncated_rollout_cli.py): test infra works around a real
+    meshnet/train.py limitation instead of patching production code.
+    """
+    if paths["test_npz_name"] == "test.npz":
+        yield paths["data_path"]
+        return
+    with tempfile.TemporaryDirectory(prefix="paper_parity_dataset_") as scratch:
+        scratch_path = Path(scratch)
+        (scratch_path / "test.npz").symlink_to(paths["test_npz"])
+        yield scratch_path
 
 
 def run_current_rollout(model_key: str, output_dir: Path, cuda_device=None, truncated_nsteps=None):
@@ -64,38 +98,40 @@ def run_current_rollout(model_key: str, output_dir: Path, cuda_device=None, trun
     if truncated_nsteps is not None:
         entry = [sys.executable,
                  str(REPO_ROOT / "test" / "fixtures" / "paper_parity" / "truncated_rollout_cli.py")]
-        import os
         env = dict(os.environ)
         env["TRUNCATED_ROLLOUT_NSTEPS"] = str(truncated_nsteps)
     else:
         entry = [sys.executable, "-m", "meshnet.train"]
 
-    cmd = entry + [
-        "--mode=rollout",
-        f"--data_path={paths['data_path']}/",
-        f"--model_path={paths['model_path']}/",
-        f"--output_path={output_dir}/",
-        f"--model_file={paths['model_file']}",
-        f"--train_state_file={paths['train_state_file']}",
-    ]
-    if cuda_device is not None:
-        cmd.append(f"--cuda_device_number={cuda_device}")
+    with dataset_dir_for(paths) as data_path:
+        cmd = entry + [
+            "--mode=rollout",
+            f"--data_path={data_path}/",
+            f"--model_path={paths['model_path']}/",
+            f"--output_path={output_dir}/",
+            f"--model_file={paths['model_file']}",
+            f"--train_state_file={paths['train_state_file']}",
+        ]
+        if cuda_device is not None:
+            cmd.append(f"--cuda_device_number={cuda_device}")
 
-    print(f"[{model_key}] running: {' '.join(cmd)}"
-          + (f" (quick tier, N={truncated_nsteps})" if truncated_nsteps is not None else ""))
-    t0 = time.time()
-    result = subprocess.run(cmd, cwd=REPO_ROOT, env=env, capture_output=True, text=True)
-    elapsed = time.time() - t0
-    if result.returncode != 0:
-        print(result.stdout[-4000:])
-        print(result.stderr[-4000:])
-        raise RuntimeError(
-            f"[{model_key}] rollout subprocess failed (exit {result.returncode}); see output above")
+        print(f"[{model_key}] running: {' '.join(cmd)}"
+              + (f" (quick tier, N={truncated_nsteps})" if truncated_nsteps is not None else "")
+              + (f" (scratch data_path, test_npz_name={paths['test_npz_name']!r})"
+                 if paths["test_npz_name"] != "test.npz" else ""))
+        t0 = time.time()
+        result = subprocess.run(cmd, cwd=REPO_ROOT, env=env, capture_output=True, text=True)
+        elapsed = time.time() - t0
+        if result.returncode != 0:
+            print(result.stdout[-4000:])
+            print(result.stderr[-4000:])
+            raise RuntimeError(
+                f"[{model_key}] rollout subprocess failed (exit {result.returncode}); see output above")
 
-    pkls = sorted(output_dir.glob("rollout_*.pkl"), key=lambda p: int(p.stem.split("_")[-1]))
-    if not pkls:
-        raise RuntimeError(f"[{model_key}] rollout produced no rollout_*.pkl files in {output_dir}")
-    return pkls, elapsed
+        pkls = sorted(output_dir.glob("rollout_*.pkl"), key=lambda p: int(p.stem.split("_")[-1]))
+        if not pkls:
+            raise RuntimeError(f"[{model_key}] rollout produced no rollout_*.pkl files in {output_dir}")
+        return pkls, elapsed
 
 
 def compute_current_metrics(model_key: str, output_dir: Path, cuda_device=None, truncated_nsteps=None):

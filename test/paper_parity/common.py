@@ -193,29 +193,53 @@ MODEL_REGISTRY = {
 # NOTES_pr2.md for the sha256 investigation behind each provenance/family
 # note). Paths verified against gns-sample/ on 2026-09-27.
 TEST_SET_REGISTRY = {
-    # NOTE: "M1_large" and "M1_small" (case3.200m.homo.a.Vw.others' large-
-    # 40km-fault and small-fault test sets) are DELIBERATELY NOT registered
-    # here yet. Conductor's fresh oracle re-run (2026-09-27) found a real
-    # data-path defect, not a code regression: `meshnet/train.py`'s rollout
-    # mode always reads `{data_path}test.npz` (train.py:56, hardcoded
-    # filename, not configurable), but `case3.200m.homo.a.Vw.others/dataset/`
-    # holds THREE npz files -- `case3.200m.100m.npz`, `case3.200m.small.npz`,
-    # and a generic `test.npz` that is currently byte-identical (sha256
+    # NOTE: "M1_large" (case3.200m.homo.a.Vw.others' large-40km-fault test
+    # set) is DELIBERATELY NOT registered here. Conductor's fresh oracle
+    # re-run (2026-09-27) found a real data-path defect, not a code
+    # regression: `meshnet/train.py`'s rollout mode always reads
+    # `{data_path}test.npz` (train.py:56, hardcoded filename, not
+    # configurable), but `case3.200m.homo.a.Vw.others/dataset/` holds THREE
+    # npz files -- `case3.200m.100m.npz`, `case3.200m.small.npz`, and a
+    # generic `test.npz` that is currently byte-identical (sha256
     # 17f35dcf67a07e7d) to `case3.200m.100m.npz`, i.e. the LARGE set. A fresh
     # M1_large gate run reproduced 18564 nodes from that `test.npz`, but the
     # `.large.published` baseline's own embedded ground truth has 10302
-    # nodes -- the published baseline was generated against a DIFFERENT
-    # dataset than what `test.npz` currently is (mse_raw blew up 0.208 ->
-    # 4.45, a 20x swing, at cuda-device 1, wall-clock 78.2s -- see
-    # NOTES_pr2.md). M1_small would be even more wrong: it shares the SAME
-    # working_dir/dataset path, so it would ALSO silently read the large
-    # `test.npz` instead of `case3.200m.small.npz`, feeding a small-fault
-    # checkpoint the large-fault mesh. Do not register either until this is
-    # fixed (either point `data_path` at a dedicated per-variant `dataset/`
-    # subdirectory containing the correctly-named `test.npz` for each case,
-    # or confirm which existing npz the `.large.published` baseline actually
-    # corresponds to and symlink/copy it into place) -- see NOTES_pr2.md
-    # "Held back" section.
+    # nodes -- the published baseline (May-13-2025 batch) was generated
+    # against a DIFFERENT dataset than what `test.npz` currently is (a
+    # Nov-4-2025 batch; mse_raw blew up 0.208 -> 4.45, a 20x swing, at
+    # cuda-device 1, wall-clock 78.2s -- see NOTES_pr2.md). No archival copy
+    # of the May-13 dataset has been found in this repo; this is a genuine
+    # data-availability gap needing owner input, left unresolved on purpose.
+    #
+    # "M1_small" (case3.200m.homo.a.Vw.others' small-fault test set) IS
+    # registered below, PR #2 addendum (2026-09-27): `case3.200m.small.npz`
+    # (827 timesteps x 1352 nodes) was confirmed to match the node count
+    # embedded in the published small-fault rollout's own ground truth
+    # (`rollouts.nmp10.cotopaxi.small.D1.T_small/model-3000000.pt/
+    # rollout_0.pkl`'s `ground_truth_rollout.shape` == (826, 1352, 2) -- one
+    # fewer timestep than the npz's 827, as expected: rollout drops the
+    # `INPUT_SEQUENCE_LENGTH`-th initial frame). Both that pkl and
+    # `case3.200m.small.npz` carry Nov-4-2025 mtimes, the same batch --
+    # consistent with this being the correct paired dataset for M1_small,
+    # unlike M1_large above. `test_npz_name` below tells `model_paths()` and
+    # `run_gate.py` to stage the correctly-named `test.npz` symlink in a
+    # scratch dir rather than reading the shared `dataset/` folder's generic
+    # (wrong, large-fault) `test.npz` directly -- see run_gate.py's
+    # `dataset_dir_for()`.
+    "M1_small": {
+        "working_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others",
+        "model_dir": (
+            GNS_SAMPLE / "case3.200m.homo.a.Vw.others" / "models.nmp10.cotopaxi"),
+        "model_step": 3000000,
+        "test_npz_name": "case3.200m.small.npz",
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case3.200m.homo.a.Vw.others"
+            / "rollouts.nmp10.cotopaxi.small.D1.T_small" / "model-3000000.pt"),
+        # No `.published` suffix on this rollout dir -- provenance
+        # "unconfirmed" per mandate, despite the node-count/mtime-batch
+        # match above being reassuring circumstantial evidence.
+        "provenance": "unconfirmed",
+    },
     # --- M2 (.r1 family) on its own D2 test set -------------------------
     # NOTE (open question, see NOTES_pr2.md): the checkpoint the paper calls
     # M2 -- models.nmp10.cotopaxi.r1/model-2900000.pt (sha256 4ff5adfd...) --
@@ -323,13 +347,25 @@ def model_paths(model_key: str) -> dict:
     entry = ALL_REGISTRY[model_key]
     model_file = f"model-{entry['model_step']}.pt"
     train_state_file = f"train_state-{entry['model_step']}.pt"
+    # `test_npz_name` (default "test.npz"): PR #2 addendum (2026-09-27, M1_small
+    # fix). Some working_dir/dataset/ folders (e.g.
+    # case3.200m.homo.a.Vw.others/dataset/) hold MULTIPLE npz files sharing one
+    # directory, and meshnet/train.py's rollout mode always reads the literal
+    # filename `test.npz` (train.py:56, hardcoded, not configurable). Entries
+    # whose real dataset file is NOT named `test.npz` set `test_npz_name` so
+    # this function reports/hashes the CORRECT file, and callers that actually
+    # invoke `-m meshnet.train` (run_gate.py) know they must stage a
+    # correctly-named symlink in a scratch dir rather than pointing --data_path
+    # straight at working_dir/dataset (see run_gate.py::dataset_dir_for).
+    test_npz_name = entry.get("test_npz_name", "test.npz")
     return {
         "data_path": entry["working_dir"] / "dataset",
         "model_path": entry["model_dir"],
         "model_file": model_file,
         "train_state_file": train_state_file,
         "checkpoint": entry["model_dir"] / model_file,
-        "test_npz": entry["working_dir"] / "dataset" / "test.npz",
+        "test_npz": entry["working_dir"] / "dataset" / test_npz_name,
+        "test_npz_name": test_npz_name,
         "published_rollout_dir": entry["published_rollout_dir"],
         "provenance": entry["provenance"],
     }

@@ -1,0 +1,25 @@
+{
+  "model_key": "M1_small",
+  "provenance": "unconfirmed",
+  "published_rollout_dir": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-m1small/gns-sample/case3.200m.homo.a.Vw.others/rollouts.nmp10.cotopaxi.small.D1.T_small/model-3000000.pt",
+  "checkpoint_path": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-m1small/gns-sample/case3.200m.homo.a.Vw.others/models.nmp10.cotopaxi/model-3000000.pt",
+  "checkpoint_sha256": "e0f97a34ab08e0add1e8d2e979999a8e7445c0fa8f60250c13ae4ba49f75f440",
+  "test_npz_path": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-m1small/gns-sample/case3.200m.homo.a.Vw.others/dataset/case3.200m.small.npz",
+  "test_npz_sha256": "085f7ab83bdca7685dda73fa496bb44aa2bc83b3704d7f4485a323aaab3aec0a",
+  "n_trajectories": 1,
+  "trajectories": [
+    {
+      "mse_raw": 0.0215082896702518,
+      "mse_vx": 0.043016579085929714,
+      "mse_vy": 2.5457384704387364e-10,
+      "rupture_time_rmse": 0.010797869943985202,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 1352,
+      "n_valid_rupture_nodes": 1352,
+      "pkl_file": "rollout_0.pkl",
+      "mean_loss_reported": 0.021508289501070976,
+      "mean_acc_loss_reported": null
+    }
+  ]
+}

@@ -145,6 +145,91 @@ confirm from `rollout.log.txt`/training logs which existing npz the `.large.publ
 baseline was actually generated from and symlink/copy it into place. Left as an explicit
 gap on `parity-coverage-matrix` (PATHWAY_FORWARD.md) rather than merged broken.
 
+## 2026-09-27 addendum (branch `m1-small-fix`): M1_small fixed and registered, M1_large left alone
+
+Conductor's fresh oracle re-run flagged one thing not yet acted on: file mtimes suggest
+`case3.200m.100m.npz`, `case3.200m.small.npz`, and the small-fault published rollout
+(`rollouts.nmp10.cotopaxi.small.D1.T_small/model-3000000.pt/rollout_0.pkl`) are ALL from
+the same Nov-4-2025 batch, while `M1_large`'s published rollout
+(`rollouts.nmp10.cotopaxi.large.published/model-4000000.pt/`) is from an EARLIER, May-13-2025
+batch. This session verified the M1_small half of that hypothesis empirically rather than
+just trusting the mtime coincidence:
+
+**Node-count check (step 1).** Loaded `case3.200m.small.npz` directly (not via
+`meshnet`): `trajectory0` is a dict of arrays shaped `(827, 1352, 2)` (pos/velocity),
+i.e. 827 timesteps x 1352 nodes. Loaded the published small-fault pkl via
+`common.load_pkl` + `common.py`'s own convention: `ground_truth_rollout.shape == (826,
+1352, 2)` -- 1352 nodes, matching exactly (826 = 827 - 1, the usual rollout-vs-npz
+off-by-one from dropping the first `INPUT_SEQUENCE_LENGTH`-th frame, consistent with how
+`rollout()` derives `ground_truth_velocities` elsewhere in this repo's own conventions).
+**MATCH confirmed** -> proceeded to wiring per the mission's step 1 branch, did NOT touch
+`M1_large` (left exactly as documented above -- still no npz matches its 10302-node
+baseline, still needs owner input, not attempted).
+
+**Fix (step 2), file:line:**
+- `test/paper_parity/common.py`: `model_paths()` (~line 320) now reads an optional
+  `test_npz_name` field per registry entry (default `"test.npz"`), used to compute
+  `test_npz` and returned as `paths["test_npz_name"]`. `TEST_SET_REGISTRY["M1_small"]`
+  (~line 218) sets `test_npz_name: "case3.200m.small.npz"`, `working_dir`
+  `case3.200m.homo.a.Vw.others`, `model_dir` `.../models.nmp10.cotopaxi`, `model_step`
+  3000000, `published_rollout_dir` `.../rollouts.nmp10.cotopaxi.small.D1.T_small/
+  model-3000000.pt`, `provenance: "unconfirmed"` (no `.published` suffix on that dir --
+  warning left firing, not suppressed).
+- `test/paper_parity/run_gate.py`: new `dataset_dir_for(paths)` contextmanager (~line 33,
+  right after the module constants) -- when `paths["test_npz_name"] == "test.npz"` it's a
+  no-op (yields the real `working_dir/dataset` unchanged, byte-for-byte the old
+  behaviour for every other registry key); otherwise it builds a `tempfile.
+  TemporaryDirectory()` scratch dir (never inside `gns-sample/`, always removed on exit)
+  containing exactly one symlink, `test.npz` -> the real npz file, and yields that as
+  `--data_path`. `run_current_rollout()` now wraps its `subprocess.run` call in
+  `with dataset_dir_for(paths) as data_path:` instead of using `paths['data_path']`
+  directly. Same non-invasive "test infra works around a train.py limitation, never
+  patches it" pattern as PR #4's `truncated_rollout_cli.py`, but simpler here -- no
+  monkeypatching needed, since the workaround is purely a filesystem-path trick
+  (`meshnet/train.py` itself is untouched, still reads whatever `--data_path` says).
+
+**Baseline extraction (step 3).** `python3 test/paper_parity/extract_baselines.py --model
+M1_small` (fast, no GPU): wrote `baseline_M1_small.json`, 1 trajectory
+(`rollout_0.pkl`): `mse_raw=0.0215`, `mse_vx=0.0430`, `mse_vy=2.55e-10` (~0, expected for
+this in-plane problem, same convention as every other key), `rupture_time_rmse=0.0108`,
+`missed=0`, `false=0` -- no NaNs. `test_npz_sha256` recorded as `085f7ab83bdca768...`,
+matching the sha256 already cited above for `case3.200m.small.npz` (confirms
+`model_paths()`'s new `test_npz_name` override is hashing the CORRECT file, not the
+shared directory's generic large-fault `test.npz`).
+
+**Real gate run (step 4).** `nvidia-smi` showed GPU 1 free-ish (6.7GB/40GB used, vs GPU 0
+at 35GB/93% util) so ran on `--cuda-device 1` as instructed:
+
+```
+python3 test/paper_parity/run_gate.py --model M1_small --cuda-device 1
+```
+
+Printed warning fired as expected (`provenance is 'unconfirmed' -- NOT a confirmed
+paper-parity oracle`, not suppressed). Command line confirmed the scratch-dir fix
+actually engaged: `--data_path=/tmp/paper_parity_dataset_g6fjvfok/` (NOT
+`case3.200m.homo.a.Vw.others/dataset/`), annotated `(scratch data_path,
+test_npz_name='case3.200m.small.npz')`. Wall-clock: rollout 15.6s (single trajectory,
+consistent with `checkerboard`'s comparable-sized 39.6s/2-trajectory precedent above).
+Per-trajectory table:
+
+| traj | status | tol_source | mse_raw (baseline->current, diff) | mse_vx | mse_vy | rupture_time_rmse | missed | false |
+|---|---|---|---|---|---|---|---|---|
+| rollout_0.pkl | PASS | global-fallback | 0.021508290->0.021508402 (d=1.12e-7 <= 0.02) | 0.043017->0.043017 (d=2.24e-7 <= 0.04) | 2.546e-10->2.546e-10 (d=5.18e-16 <= 1e-4) | 0.0107979->0.0107979 (d=0.0 <= 0.001) | 0->0 (d=0<=2) | 0->0 (d=0<=2) |
+
+`OVERALL GATE: PASS`. Diffs are all ~1e-7 or smaller -- consistent with ordinary
+GPU-kernel-order nondeterminism already characterized elsewhere in this test suite (PR
+#3's per-trajectory tolerance work), not evidence of a dataset mismatch (a true
+wrong-dataset run would look like `M1_large`'s 20x `mse_raw` blowup above, not a 1e-7
+wobble). Scratch dir (`/tmp/paper_parity_dataset_g6fjvfok`) confirmed removed after the
+run (no leftover directory); output pkl left in place at
+`/tmp/paper_parity_gate_output/M1_small/rollout_0.pkl` per `run_gate.py`'s existing
+(unchanged) `--work-root` default, not this session's concern to clean up.
+
+`M1_large` was NOT touched this session -- still held back exactly as documented in the
+"Held back" section above, still needing owner input on the May-13-2025 dataset's
+availability. `meshnet/train.py`, `PROJECT_RULES.md`, `PATHWAY_FORWARD.md` were not
+edited (board/production code out of scope for this branch).
+
 ## Coverage still open after this PR
 - M2's own D2 test using the ACTUAL `.r1`/2900000 checkpoint: impossible to gate -- no
   published pkls exist for it (see ambiguity #1). This is a genuine gap in the published
