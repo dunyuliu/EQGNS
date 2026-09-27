@@ -193,27 +193,29 @@ MODEL_REGISTRY = {
 # NOTES_pr2.md for the sha256 investigation behind each provenance/family
 # note). Paths verified against gns-sample/ on 2026-09-27.
 TEST_SET_REGISTRY = {
-    # --- M1 (case3.200m.homo.a.Vw checkpoint) on its "others" test sets ---
-    "M1_large": {
-        "working_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others",
-        "model_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others" / "models.nmp10.cotopaxi",
-        "model_step": 4000000,
-        "published_rollout_dir": (
-            GNS_SAMPLE / "case3.200m.homo.a.Vw.others"
-            / "rollouts.nmp10.cotopaxi.large.published" / "model-4000000.pt"),
-        "provenance": "published",
-    },
-    "M1_small": {
-        "working_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others",
-        "model_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others" / "models.nmp10.cotopaxi",
-        "model_step": 3000000,
-        # No `.published` suffix on this dir -- default per mission mandate:
-        # provenance "unconfirmed". Only 1 pkl exists here (single trajectory).
-        "published_rollout_dir": (
-            GNS_SAMPLE / "case3.200m.homo.a.Vw.others"
-            / "rollouts.nmp10.cotopaxi.small.D1.T_small" / "model-3000000.pt"),
-        "provenance": "unconfirmed",
-    },
+    # NOTE: "M1_large" and "M1_small" (case3.200m.homo.a.Vw.others' large-
+    # 40km-fault and small-fault test sets) are DELIBERATELY NOT registered
+    # here yet. Conductor's fresh oracle re-run (2026-09-27) found a real
+    # data-path defect, not a code regression: `meshnet/train.py`'s rollout
+    # mode always reads `{data_path}test.npz` (train.py:56, hardcoded
+    # filename, not configurable), but `case3.200m.homo.a.Vw.others/dataset/`
+    # holds THREE npz files -- `case3.200m.100m.npz`, `case3.200m.small.npz`,
+    # and a generic `test.npz` that is currently byte-identical (sha256
+    # 17f35dcf67a07e7d) to `case3.200m.100m.npz`, i.e. the LARGE set. A fresh
+    # M1_large gate run reproduced 18564 nodes from that `test.npz`, but the
+    # `.large.published` baseline's own embedded ground truth has 10302
+    # nodes -- the published baseline was generated against a DIFFERENT
+    # dataset than what `test.npz` currently is (mse_raw blew up 0.208 ->
+    # 4.45, a 20x swing, at cuda-device 1, wall-clock 78.2s -- see
+    # NOTES_pr2.md). M1_small would be even more wrong: it shares the SAME
+    # working_dir/dataset path, so it would ALSO silently read the large
+    # `test.npz` instead of `case3.200m.small.npz`, feeding a small-fault
+    # checkpoint the large-fault mesh. Do not register either until this is
+    # fixed (either point `data_path` at a dedicated per-variant `dataset/`
+    # subdirectory containing the correctly-named `test.npz` for each case,
+    # or confirm which existing npz the `.large.published` baseline actually
+    # corresponds to and symlink/copy it into place) -- see NOTES_pr2.md
+    # "Held back" section.
     # --- M2 (.r1 family) on its own D2 test set -------------------------
     # NOTE (open question, see NOTES_pr2.md): the checkpoint the paper calls
     # M2 -- models.nmp10.cotopaxi.r1/model-2900000.pt (sha256 4ff5adfd...) --

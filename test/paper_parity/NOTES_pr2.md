@@ -121,6 +121,30 @@ No `run_gate.py` rollout re-run was performed against any new key -- that verifi
 (live GPU rollout vs baseline) is explicitly the conductor's job before merge, not this
 session's. Only `extract_baselines.py` (reads existing published pkls, no GPU) was run.
 
+## Held back before merge (conductor's fresh oracle re-run, 2026-09-27)
+
+`M1_large`/`M1_small` were dropped from `common.py`'s `TEST_SET_REGISTRY` before this
+branch was merged into `paper-parity-gate`. Fresh `run_gate.py --model M1_large
+--cuda-device 1` (real gns-sample/ data, not a subagent report) gave `mse_raw` 0.208 ->
+4.45 (20x, wall-clock 78.2s) with `n_nodes` 18564 in the fresh rollout vs 10302 embedded
+in the `.large.published` baseline's own ground truth -- the published baseline was
+generated against a different dataset than what
+`case3.200m.homo.a.Vw.others/dataset/test.npz` currently is. `meshnet/train.py:56`
+hardcodes `{data_path}test.npz` for rollout mode (not configurable per-call), and that
+directory holds three npz files (`case3.200m.100m.npz`, sha256 `17f35dcf67a07e7d`,
+byte-identical to the current `test.npz`; `case3.200m.small.npz`, sha256
+`085f7ab83bdca768`; generic `test.npz`) -- `M1_small`, sharing the same `working_dir`,
+would have silently rolled out the LARGE 18564-node mesh through a
+small-fault-trained checkpoint instead of `case3.200m.small.npz`. This is a genuine
+data-path/dataset-selection defect in how these two entries were wired, not a `meshnet`
+code regression (confirmed the other 5 new pairs work correctly: `checkerboard` PASS
+fresh, 39.6s, 2/2 trajectories within tolerance; the sha256 provenance claims above were
+independently re-derived and matched). Fix needed before either can be registered: either
+give each variant its own `dataset/` subdirectory with a correctly-named `test.npz`, or
+confirm from `rollout.log.txt`/training logs which existing npz the `.large.published`
+baseline was actually generated from and symlink/copy it into place. Left as an explicit
+gap on `parity-coverage-matrix` (PATHWAY_FORWARD.md) rather than merged broken.
+
 ## Coverage still open after this PR
 - M2's own D2 test using the ACTUAL `.r1`/2900000 checkpoint: impossible to gate -- no
   published pkls exist for it (see ambiguity #1). This is a genuine gap in the published
