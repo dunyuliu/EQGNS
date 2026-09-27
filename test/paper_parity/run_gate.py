@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from common import MODEL_REGISTRY, gns_sample_available, load_pkl, model_paths, per_trajectory_metrics  # noqa: E402
+from common import ALL_REGISTRY, gns_sample_available, load_pkl, model_paths, per_trajectory_metrics  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -187,7 +187,7 @@ def print_table(model_key: str, rows):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--model", choices=list(MODEL_REGISTRY) + ["all"], default="all")
+    ap.add_argument("--model", choices=list(ALL_REGISTRY) + ["all"], default="all")
     ap.add_argument("--cuda-device", type=int, default=None)
     ap.add_argument("--work-dir", type=Path, default=Path("/tmp/paper_parity_gate_output"),
                      help="Scratch dir for re-run rollout pkls (not committed).")
@@ -200,7 +200,7 @@ def main():
         sys.exit(2)
 
     tol = load_tolerance(args.tolerance)
-    keys = list(MODEL_REGISTRY) if args.model == "all" else [args.model]
+    keys = list(ALL_REGISTRY) if args.model == "all" else [args.model]
 
     overall_ok = True
     total_elapsed = 0.0

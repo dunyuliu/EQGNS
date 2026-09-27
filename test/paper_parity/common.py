@@ -186,10 +186,139 @@ MODEL_REGISTRY = {
 }
 
 
+# --- PR #2: test-set coverage matrix --------------------------------------
+# Every (model, test-set) pair below is an ADDITIONAL row keyed by a distinct
+# registry key, in the SAME shape as MODEL_REGISTRY (so model_paths() /
+# find_published_pkls() / per_trajectory_metrics() need no changes -- see
+# NOTES_pr2.md for the sha256 investigation behind each provenance/family
+# note). Paths verified against gns-sample/ on 2026-09-27.
+TEST_SET_REGISTRY = {
+    # --- M1 (case3.200m.homo.a.Vw checkpoint) on its "others" test sets ---
+    "M1_large": {
+        "working_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others",
+        "model_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others" / "models.nmp10.cotopaxi",
+        "model_step": 4000000,
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case3.200m.homo.a.Vw.others"
+            / "rollouts.nmp10.cotopaxi.large.published" / "model-4000000.pt"),
+        "provenance": "published",
+    },
+    "M1_small": {
+        "working_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others",
+        "model_dir": GNS_SAMPLE / "case3.200m.homo.a.Vw.others" / "models.nmp10.cotopaxi",
+        "model_step": 3000000,
+        # No `.published` suffix on this dir -- default per mission mandate:
+        # provenance "unconfirmed". Only 1 pkl exists here (single trajectory).
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case3.200m.homo.a.Vw.others"
+            / "rollouts.nmp10.cotopaxi.small.D1.T_small" / "model-3000000.pt"),
+        "provenance": "unconfirmed",
+    },
+    # --- M2 (.r1 family) on its own D2 test set -------------------------
+    # NOTE (open question, see NOTES_pr2.md): the checkpoint the paper calls
+    # M2 -- models.nmp10.cotopaxi.r1/model-2900000.pt (sha256 4ff5adfd...) --
+    # has a `.published` rollout dir at case4.200m.multi.stress.homo.a.Vw/
+    # rollouts.nmp10.cotopaxi.r1.published/model-2900000.pt, but that
+    # directory contains ZERO rollout_*.pkl files (only rollout.log.txt) --
+    # confirmed by directory listing 2026-09-27. There is THEREFORE NO
+    # PUBLISHED PKL DATA to gate M2's own D2 test against using the .r1
+    # checkpoint. We do NOT fabricate a baseline for it.
+    #
+    # A DIFFERENT rollout dir, rollouts.nmp10.cotopaxi.published/
+    # model-3000000.pt (no .r1 suffix), DOES have 10 published pkls, but its
+    # checkpoint (sha256 086fa959...) is a byte-DIFFERENT, separately-trained
+    # model from the .r1 family -- confirmed by sha256 (see NOTES_pr2.md).
+    # We gate that checkpoint here under its own key, "M2_altckpt_D2", so it
+    # is never silently conflated with the paper's M2. Whether this
+    # non-.r1/3000000 run is actually the one shown in the paper's D2 figure
+    # is UNRESOLVED and flagged as an open question for the owner.
+    "M2_altckpt_D2": {
+        "working_dir": GNS_SAMPLE / "case4.200m.multi.stress.homo.a.Vw",
+        "model_dir": GNS_SAMPLE / "case4.200m.multi.stress.homo.a.Vw" / "models.nmp10.cotopaxi",
+        "model_step": 3000000,
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.homo.a.Vw"
+            / "rollouts.nmp10.cotopaxi.published" / "model-3000000.pt"),
+        "provenance": "published",
+    },
+    # --- M2 (.r1 family) on the case3-test (cross-hypocenter) test set ---
+    # NOTE: this test set uses model-3000000.pt of the .r1 run (sha256
+    # 3dbfb4ab...), NOT model-2900000.pt (sha256 4ff5adfd..., used for the
+    # existing "M2" D3-fractal gate) -- confirmed distinct checkpoint steps
+    # of the SAME .r1 training run by sha256 (see NOTES_pr2.md). This is a
+    # different step choice per test set, not a training-run ambiguity.
+    "M2_case3test": {
+        "working_dir": GNS_SAMPLE / "case4.200m.multi.stress.homo.a.Vw.case3.test",
+        "model_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.homo.a.Vw.case3.test"
+            / "models.nmp10.cotopaxi.r1"),
+        "model_step": 3000000,
+        # No `.published` suffix -- provenance "unconfirmed" per mandate.
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.homo.a.Vw.case3.test"
+            / "rollouts.nmp10.cotopaxi.r1" / "model-3000000.pt"),
+        "provenance": "unconfirmed",
+    },
+    # --- checkerboard test set (case4.200m.multi.asp.homo.a.Vw) ---------
+    # Provenance investigation (see NOTES_pr2.md): the checkerboard model
+    # checkpoint models.nmp10.cotopaxi/model-3000000.pt is sha256
+    # 086fa959e1310c52e5da74f39e3ebabd532a3fcefb33004a860ae3d38403e976 --
+    # BYTE-IDENTICAL to the non-.r1 M2 checkpoint gated above as
+    # "M2_altckpt_D2", and DISTINCT from both steps of the paper's .r1 M2
+    # checkpoint family (2900000 sha256 4ff5adfd..., 3000000 sha256
+    # 3dbfb4ab...). So checkerboard shares weights with the non-.r1 training
+    # run, NOT the paper's M2 (.r1) run. It is registered under its own key
+    # rather than folded into the M2 family. No `.published` rollout dir
+    # exists here either -- provenance "unconfirmed". Whether the paper's
+    # checkerboard figure actually uses this non-.r1 checkpoint or a
+    # separately-trained model entirely is an OPEN QUESTION for the owner.
+    "checkerboard": {
+        "working_dir": GNS_SAMPLE / "case4.200m.multi.asp.homo.a.Vw",
+        "model_dir": GNS_SAMPLE / "case4.200m.multi.asp.homo.a.Vw" / "models.nmp10.cotopaxi",
+        "model_step": 3000000,
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case4.200m.multi.asp.homo.a.Vw"
+            / "rollouts.nmp10.cotopaxi" / "model-3000000.pt"),
+        "provenance": "unconfirmed",
+    },
+    # --- M3 (.r1 lr3e-5.b8 family) on the case3-test test set -----------
+    "M3_case3test": {
+        "working_dir": GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.test",
+        "model_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.test"
+            / "models.nmp10.lr3e-5.b8.cotopaxi.r1"),
+        "model_step": 2700000,
+        # No `.published` suffix -- provenance "unconfirmed" per mandate.
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.test"
+            / "rollouts.nmp10.lr3e-5.b8.cotopaxi.r1" / "model-2700000.pt"),
+        "provenance": "unconfirmed",
+    },
+    # --- M3 (.r1 lr3e-5.b8 family) on the case3.others.test test set ----
+    "M3_case3othertest": {
+        "working_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.others.test"),
+        "model_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.others.test"
+            / "models.nmp10.lr3e-5.b8.cotopaxi.r1"),
+        "model_step": 2700000,
+        "published_rollout_dir": (
+            GNS_SAMPLE / "case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.others.test"
+            / "rollouts.nmp10.lr3e-5.b8.cotopaxi.r1.published" / "model-2700000.pt"),
+        "provenance": "published",
+    },
+}
+
+# Merge into a single lookup so model_paths()/run_gate.py/extract_baselines.py
+# need no branching logic between "model" and "test-set" rows -- they are the
+# same shape and the same machinery applies uniformly.
+ALL_REGISTRY = {**MODEL_REGISTRY, **TEST_SET_REGISTRY}
+
+
 def model_paths(model_key: str) -> dict:
-    if model_key not in MODEL_REGISTRY:
-        raise KeyError(f"Unknown model key {model_key!r}; expected one of {list(MODEL_REGISTRY)}")
-    entry = MODEL_REGISTRY[model_key]
+    if model_key not in ALL_REGISTRY:
+        raise KeyError(f"Unknown model key {model_key!r}; expected one of {list(ALL_REGISTRY)}")
+    entry = ALL_REGISTRY[model_key]
     model_file = f"model-{entry['model_step']}.pt"
     train_state_file = f"train_state-{entry['model_step']}.pt"
     return {

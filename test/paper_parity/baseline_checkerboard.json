@@ -1,0 +1,38 @@
+{
+  "model_key": "checkerboard",
+  "provenance": "unconfirmed",
+  "published_rollout_dir": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-iris/gns-sample/case4.200m.multi.asp.homo.a.Vw/rollouts.nmp10.cotopaxi/model-3000000.pt",
+  "checkpoint_path": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-iris/gns-sample/case4.200m.multi.asp.homo.a.Vw/models.nmp10.cotopaxi/model-3000000.pt",
+  "checkpoint_sha256": "086fa959e1310c52e5da74f39e3ebabd532a3fcefb33004a860ae3d38403e976",
+  "test_npz_path": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-iris/gns-sample/case4.200m.multi.asp.homo.a.Vw/dataset/test.npz",
+  "test_npz_sha256": "c5f66c231d02b96fb6d19ab3095cb082396bb6909797b5e0c351e8bb8d60973f",
+  "n_trajectories": 2,
+  "trajectories": [
+    {
+      "mse_raw": 0.1599496147770237,
+      "mse_vx": 0.31989922790780867,
+      "mse_vy": 1.6462385159290624e-09,
+      "rupture_time_rmse": 0.11398601438014523,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4692,
+      "n_valid_rupture_nodes": 4692,
+      "pkl_file": "rollout_0.pkl",
+      "mean_loss_reported": 0.15994960069656372,
+      "mean_acc_loss_reported": 4.183985233306885
+    },
+    {
+      "mse_raw": 0.25634308366616854,
+      "mse_vx": 0.5126861656195795,
+      "mse_vy": 1.7127579229505568e-09,
+      "rupture_time_rmse": 0.10808471434293584,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4692,
+      "n_valid_rupture_nodes": 4692,
+      "pkl_file": "rollout_1.pkl",
+      "mean_loss_reported": 0.2563430666923523,
+      "mean_acc_loss_reported": 6.705458641052246
+    }
+  ]
+}

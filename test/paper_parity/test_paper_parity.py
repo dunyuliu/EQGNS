@@ -19,7 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from common import MODEL_REGISTRY, gns_sample_available  # noqa: E402
+from common import ALL_REGISTRY, gns_sample_available  # noqa: E402
 from run_gate import diff_trajectory, load_tolerance, run_gate_for_model  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -65,7 +65,7 @@ _PARAMS = [
             strict=True,
         ),
     ) if key == "M3" else key
-    for key in MODEL_REGISTRY
+    for key in ALL_REGISTRY
 ]
 
 

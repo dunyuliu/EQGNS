@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from common import (  # noqa: E402
-    MODEL_REGISTRY,
+    ALL_REGISTRY,
     find_published_pkls,
     load_pkl,
     model_paths,
@@ -82,10 +82,10 @@ def extract_one(model_key: str) -> dict:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--model", choices=list(MODEL_REGISTRY) + ["all"], default="all")
+    ap.add_argument("--model", choices=list(ALL_REGISTRY) + ["all"], default="all")
     args = ap.parse_args()
 
-    keys = list(MODEL_REGISTRY) if args.model == "all" else [args.model]
+    keys = list(ALL_REGISTRY) if args.model == "all" else [args.model]
     for key in keys:
         baseline = extract_one(key)
         out_path = OUT_DIR / f"baseline_{key}.json"

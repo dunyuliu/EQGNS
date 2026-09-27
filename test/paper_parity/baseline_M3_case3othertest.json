@@ -1,0 +1,90 @@
+{
+  "model_key": "M3_case3othertest",
+  "provenance": "published",
+  "published_rollout_dir": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-iris/gns-sample/case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.others.test/rollouts.nmp10.lr3e-5.b8.cotopaxi.r1.published/model-2700000.pt",
+  "checkpoint_path": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-iris/gns-sample/case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.others.test/models.nmp10.lr3e-5.b8.cotopaxi.r1/model-2700000.pt",
+  "checkpoint_sha256": "aac65f7ba959533bfdae976c4d0ded6e0d01f2004bc13363ace14190dda19207",
+  "test_npz_path": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-iris/gns-sample/case4.200m.multi.stress.160scenarios.homo.a.Vw.case3.others.test/dataset/test.npz",
+  "test_npz_sha256": "8dded89777b51512be344b4ef6b4a7689a381c9db92deea5e7267f1eafd1e9d4",
+  "n_trajectories": 6,
+  "trajectories": [
+    {
+      "mse_raw": 0.052984652172521275,
+      "mse_vx": 0.10596930399831121,
+      "mse_vy": 3.467312711656916e-10,
+      "rupture_time_rmse": 0.046281916725857915,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4743,
+      "pkl_file": "rollout_0.pkl",
+      "mean_loss_reported": 0.05298464745283127,
+      "mean_acc_loss_reported": 1.3845069408416748
+    },
+    {
+      "mse_raw": 0.10827838505090374,
+      "mse_vx": 0.21655676972074703,
+      "mse_vy": 3.81060211924533e-10,
+      "rupture_time_rmse": 0.12661980309414891,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 8,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4735,
+      "pkl_file": "rollout_1.pkl",
+      "mean_loss_reported": 0.10827838629484177,
+      "mean_acc_loss_reported": 2.8293509483337402
+    },
+    {
+      "mse_raw": 0.40735908033688273,
+      "mse_vx": 0.8147181602354233,
+      "mse_vy": 4.383416695192616e-10,
+      "rupture_time_rmse": 0.749180214696261,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4743,
+      "pkl_file": "rollout_2.pkl",
+      "mean_loss_reported": 0.4073590636253357,
+      "mean_acc_loss_reported": 10.644427299499512
+    },
+    {
+      "mse_raw": 0.514557267348732,
+      "mse_vx": 1.0291145342451955,
+      "mse_vy": 4.522674926627696e-10,
+      "rupture_time_rmse": 1.2399588658059997,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 2104,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 2639,
+      "pkl_file": "rollout_3.pkl",
+      "mean_loss_reported": 0.5145572423934937,
+      "mean_acc_loss_reported": 13.445551872253418
+    },
+    {
+      "mse_raw": 0.6452567436097113,
+      "mse_vx": 1.2905134867224977,
+      "mse_vy": 4.969249811054232e-10,
+      "rupture_time_rmse": 0.23001020987536785,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 2477,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 2266,
+      "pkl_file": "rollout_4.pkl",
+      "mean_loss_reported": 0.645256757736206,
+      "mean_acc_loss_reported": 16.86077308654785
+    },
+    {
+      "mse_raw": 0.054043095530265144,
+      "mse_vx": 0.1080861907083941,
+      "mse_vy": 3.521360459889554e-10,
+      "rupture_time_rmse": 0.04745387644386654,
+      "rupture_time_missed_count": 0,
+      "rupture_time_false_count": 0,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 4743,
+      "pkl_file": "rollout_5.pkl",
+      "mean_loss_reported": 0.05404309555888176,
+      "mean_acc_loss_reported": 1.4121644496917725
+    }
+  ]
+}
