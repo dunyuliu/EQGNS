@@ -1,0 +1,75 @@
+{
+  "model_key": "M1",
+  "nsteps": 100,
+  "provenance": "published",
+  "published_rollout_dir": "/tmp/claude-16759/-home-utig5-dliu-eq-rupture-gns/81f2a924-fb9f-4b8f-b063-888c12f556f9/scratchpad/wt-pr4/gns-sample/case3.200m.homo.a.Vw/rollouts.nmp10.cotopaxi/model-3000000.pt",
+  "n_trajectories": 6,
+  "trajectories": [
+    {
+      "mse_raw": 0.02120210295185567,
+      "mse_vx": 0.04240420547700101,
+      "mse_vy": 4.2671032916504543e-10,
+      "rupture_time_rmse": 0.007280951440008385,
+      "rupture_time_missed_count": 8,
+      "rupture_time_false_count": 11,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 2193,
+      "pkl_file": "rollout_0.pkl"
+    },
+    {
+      "mse_raw": 0.002809497831734243,
+      "mse_vx": 0.005618995287872123,
+      "mse_vy": 3.755963624802039e-10,
+      "rupture_time_rmse": 0.006783650756093744,
+      "rupture_time_missed_count": 7,
+      "rupture_time_false_count": 13,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 2196,
+      "pkl_file": "rollout_1.pkl"
+    },
+    {
+      "mse_raw": 0.006485612220019669,
+      "mse_vx": 0.012971224063004163,
+      "mse_vy": 3.770351777021546e-10,
+      "rupture_time_rmse": 0.008801641444192243,
+      "rupture_time_missed_count": 3,
+      "rupture_time_false_count": 23,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 1795,
+      "pkl_file": "rollout_2.pkl"
+    },
+    {
+      "mse_raw": 0.00537058949721413,
+      "mse_vx": 0.010741178676320063,
+      "mse_vy": 3.1810819845923884e-10,
+      "rupture_time_rmse": 0.007719660297284441,
+      "rupture_time_missed_count": 2,
+      "rupture_time_false_count": 16,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 1384,
+      "pkl_file": "rollout_3.pkl"
+    },
+    {
+      "mse_raw": 0.010595269437977292,
+      "mse_vx": 0.02119053855769108,
+      "mse_vy": 3.1826350659613127e-10,
+      "rupture_time_rmse": 0.012922185111661108,
+      "rupture_time_missed_count": 2,
+      "rupture_time_false_count": 26,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 1384,
+      "pkl_file": "rollout_4.pkl"
+    },
+    {
+      "mse_raw": 0.0215265827160501,
+      "mse_vx": 0.04305316500374569,
+      "mse_vy": 4.283545166555332e-10,
+      "rupture_time_rmse": 0.007359856288384484,
+      "rupture_time_missed_count": 8,
+      "rupture_time_false_count": 8,
+      "n_nodes": 4743,
+      "n_valid_rupture_nodes": 2193,
+      "pkl_file": "rollout_5.pkl"
+    }
+  ]
+}

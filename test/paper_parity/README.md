@@ -209,6 +209,41 @@ caching) should beat these numbers; this is the baseline to beat.
 None of these FAILs were resolved by loosening the tolerance further in
 this PR; see "Known limitation" for the recommended next step.
 
+## Quick tier: truncated-horizon rollout (PR #4, M1 only so far)
+
+`run_gate.py --model M1 --truncated-nsteps 100 --cuda-device <N>` runs the
+SAME current code for only the first 100 (of 826) autoregressive rollout
+steps, via `test/fixtures/paper_parity/truncated_rollout_cli.py` (a
+monkeypatch of the `rollout` nsteps cap, never edits `meshnet/train.py`),
+diffed against a baseline/tolerance derived AT that same 100-step horizon
+(`baseline_M1_truncated100.json` / `per_trajectory_tolerance_truncated.json`,
+same measurement methodology as the per-trajectory tolerance above, see
+`NOTES_pr4.md` for the full derivation and numbers).
+
+**This is an ADDITIONAL fast-feedback signal, not a replacement for the
+full-length gate above.** The default (no `--truncated-nsteps` flag)
+invocation is unchanged and remains the tier merges are judged on. A
+truncated run that only executes 100 of 826 steps cannot, by
+construction, catch a regression that only manifests in later-stage
+dynamics -- see `NOTES_pr4.md` "Falsifiability re-check" for exactly what
+this tier does and does not prove.
+
+Measured wall-clock (A100-SXM4-40GB, GPU 1, uncontended, back-to-back,
+same checkpoint/test set): full M1 (826 steps) **60.0s**; truncated M1
+(100 steps), 3 repeat runs, **14.5s / 15.3s / 14.5s** -- **~4.1x speedup**,
+not the naive 8.26x a linear-in-steps model predicts (real, measured
+fixed per-invocation overhead: checkpoint load + one-time graph
+construction + CUDA warmup).
+
+Falsifiability re-checked against the SAME planted defect
+(`test_falsifiability_truncated.py`, edge-feature sign flip,
+`meshnet/train.py:123`): null-hypothesis unmodified copy PASSES cleanly
+(0/6 trajectories, 20.0s); the planted regression FAILS 6/6 trajectories
+(20.2s), with `mse_raw` diffs exceeding the (already very tight,
+FLOOR-level) truncated tolerance by ~900,000-1,090,000x -- the truncated
+tier catches this regression at least as reliably as the full-length
+gate, at ~4.1x less wall-clock.
+
 ## Zenodo cross-check
 
 See `ZENODO_CROSS_CHECK.md`: **BLOCKED: network/size** -- network access
