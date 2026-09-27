@@ -140,6 +140,31 @@ trajectories and apply a much looser sanity check (order-of-magnitude,
 no NaN/inf, comparable rupture area) to the latter instead of a tight
 numerical diff.
 
+**Update, PR #3:** option (a) above is now implemented for M1 and M3 (M2
+deferred, see `NOTES_pr3.md` "Scope cut"). `test/paper_parity/
+measure_spread.py` runs current code >=5 times per model;
+`generate_per_trajectory_tolerance.py` derives `per_trajectory_tolerance.
+json` from the observed per-trajectory spread (repeat-run AND, after a
+bug found this session, current-vs-baseline gap); `run_gate.py` prefers
+it over the single global `tolerance.json`, falling back explicitly
+(`tol_source == "global-fallback"`) for any trajectory not measured this
+way. Re-verified end-to-end: M3 now PASSES on a fresh, independent run
+(`rollout_2`/`rollout_7`, the two previously-failing trajectories, both
+within their own now-honestly-wide bands) while trajectories that were
+never chaotic (13/15 for M3, 5/6 for M1) got MUCH TIGHTER tolerance than
+the old global scheme gave them -- see `NOTES_pr3.md` for full numbers,
+the mse_vy floor bug, the determinism-mode control experiment (spread
+COLLAPSES to exactly 0 under `torch.use_deterministic_algorithms(True)`
+for both M1 rollout_4 and M3 rollout_7 -- this is ordinary, controllable
+GPU-kernel nondeterminism, not inherent physical chaos, at 2.65x-4.44x
+wall-clock cost), and the falsifiability control
+(`test_falsifiability.py`: a planted one-line regression is caught 6/6
+while an unmodified copy still passes 6/6). M3's `xfail(strict=True)` in
+`test_paper_parity.py` is LEFT IN PLACE for this PR pending owner review
+-- see `NOTES_pr3.md` for why (a strict xfail on a now-passing case would
+itself flip to a visible XPASS failure, which is the intended signal, not
+silently removed).
+
 ## M2-on-D3 provenance caveat
 
 `case4.200m.fractal.stress.homo.a.Vw/` has **no** `.published` rollout
