@@ -331,7 +331,7 @@ def create_train_data(caseName):
     print(cells[0,ncell-1,:])
     # print(cells[0,ncell,:]) should give out of bound error
     
-    for i in range(timestep-nskip):
+    for i in range(timestep):
         tmp = np.loadtxt('src'+str(i+1+nskip)+'.txt')
         if i == 0:
             train[i,:,0] = tmp[:,3]*dt + tmp[:,0]*1e3/scale # update x position, along strike
