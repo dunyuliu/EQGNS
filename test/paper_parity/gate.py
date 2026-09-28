@@ -17,7 +17,7 @@ All rollouts run in torch deterministic mode (det_rollout.py), which makes
 reruns bit-identical; GPU nondeterminism otherwise swings chaotic
 trajectories by >100% in MSE. Metrics per trajectory: rollout MSE of vx, and
 rupture-time RMSE / missed / false node counts at 0.1 m/s
-(utils/plot.rupture.dynamics.py).
+(utils/plot.rupture.dynamics.py), over the unpadded steps (see valid_steps).
 """
 import argparse
 import json
@@ -76,9 +76,19 @@ def rupture_time(sliprate):
     return rt
 
 
+def valid_steps(pkl):
+    """Rollout steps before the dataset padding: the prepared test sets end
+    each scenario with padded frames (zero velocity, invalid node_coords),
+    which the published code feeds back into its per-step graph."""
+    c = np.asarray(pkl["node_coords"])
+    moved = np.abs(c - c[:1]).reshape(len(c), -1).max(1) > 0
+    return int(np.argmax(moved)) if moved.any() else len(c) - 1
+
+
 def metrics(pkl):
-    pred = np.asarray(pkl["predicted_rollout"], dtype=np.float64)
-    gt = np.asarray(pkl["ground_truth_rollout"], dtype=np.float64)
+    n = valid_steps(pkl)
+    pred = np.asarray(pkl["predicted_rollout"], dtype=np.float64)[:n]
+    gt = np.asarray(pkl["ground_truth_rollout"], dtype=np.float64)[:n]
     init = np.asarray(pkl["initial_velocities"], dtype=np.float64)
     rt_gt = rupture_time(np.linalg.norm(np.concatenate([init, gt]), axis=-1))
     rt_pr = rupture_time(np.linalg.norm(np.concatenate([init, pred]), axis=-1))
