@@ -12,6 +12,8 @@ M3 model-2700000.pt).
   gate.py paper [CASE ...]      reference vs the published rollout files (info)
   gate.py extract [CASE ...]    rebuild published.json from the published rollouts
   gate.py falsify M1_D1         planted regression (weights x1.005) must FAIL
+  gate.py quick                 ~3 min: one sensitive trajectory per model, 300 steps
+  (add --quick to reference/falsify for the quick-tier variant)
 
 All rollouts run in torch deterministic mode (det_rollout.py), which makes
 reruns bit-identical; GPU nondeterminism otherwise swings chaotic
@@ -40,6 +42,9 @@ REFERENCE = HERE / "reference.json"   # metrics of train.py.published, determini
 DT = 0.0167777          # utils/plot.rupture.dynamics.py
 THRESHOLD = 0.1         # m/s, SLIPRATE_THRESHOLD
 UNREACHED = 1000.0
+# quick tier: the trajectory per model most sensitive to perturbation, truncated
+QUICK = {"M1_D1": 4, "M2_D3": 14, "M3_D2": 7}
+QUICK_STEPS = 300
 KEYS = ["mse_vx", "rt_rmse", "missed", "false"]
 REL_TOL = 1e-4          # current vs published code: float reassociation only
 
@@ -111,12 +116,22 @@ def published_dir(case):
     return DATA / ds / rdir / f"model-{step}.pt"
 
 
-def run_rollout(case, out_dir, cuda, model_dir=None, code="current"):
+def write_quick_npz(src, dst, traj):
+    """One trajectory, first QUICK_STEPS rollout steps."""
+    data = np.load(src, allow_pickle=True)
+    t = data[list(data.keys())[traj]].item()
+    np.savez(dst, trajectory0={k: np.asarray(v)[:QUICK_STEPS + 1] for k, v in t.items()})
+
+
+def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False):
     """Deterministic rollout of one case with `code`; return per-trajectory metrics."""
     ds, npz, (mdir, step), _ = CASES[case]
     model_dir = model_dir or DATA / ds / mdir
     with tempfile.TemporaryDirectory() as data_dir:  # meshnet reads <data_path>/test.npz
-        (Path(data_dir) / "test.npz").symlink_to(DATA / ds / "dataset" / npz)
+        if quick:
+            write_quick_npz(DATA / ds / "dataset" / npz, Path(data_dir) / "test.npz", QUICK[case])
+        else:
+            (Path(data_dir) / "test.npz").symlink_to(DATA / ds / "dataset" / npz)
         cmd = [sys.executable, str(HERE / "det_rollout.py"), code, "--mode=rollout",
                f"--data_path={data_dir}/", f"--model_path={model_dir}/",
                f"--output_path={out_dir}/", f"--model_file=model-{step}.pt",
@@ -131,13 +146,17 @@ def run_rollout(case, out_dir, cuda, model_dir=None, code="current"):
     return out
 
 
-def fresh_rollout(case, cuda, model_dir=None, code="current"):
+def fresh_rollout(case, cuda, model_dir=None, code="current", quick=False):
     with tempfile.TemporaryDirectory() as out:
-        return run_rollout(case, out, cuda, model_dir, code)
+        return run_rollout(case, out, cuda, model_dir, code, quick)
 
 
-def compare(case, current, reference, rel_tol=REL_TOL, quiet=False):
-    ref = reference[case]
+def ref_key(case, quick):
+    return f"{case}@quick" if quick else case
+
+
+def compare(case, current, reference, rel_tol=REL_TOL, quiet=False, quick=False):
+    ref = reference[ref_key(case, quick)]
     ok = len(current) == len(ref)
     for i, (cur, r) in enumerate(zip(current, ref)):
         bad = [f"{k} {r[k]:.6g}->{cur[k]:.6g}" for k in KEYS
@@ -156,19 +175,20 @@ def save(path, obj):
     path.write_text(json.dumps(obj, indent=1) + "\n")
 
 
-def cmd_run(cases, cuda):
+def cmd_run(cases, cuda, quick=False):
     reference = load(REFERENCE)
-    results = {c: compare(c, fresh_rollout(c, cuda), reference) for c in cases}
+    results = {c: compare(c, fresh_rollout(c, cuda, quick=quick), reference, quick=quick)
+               for c in cases}
     for c, ok in results.items():
         print(f"{c}: {'PASS' if ok else 'FAIL'}")
     return all(results.values())
 
 
-def cmd_reference(cases, cuda):
+def cmd_reference(cases, cuda, quick=False):
     reference = load(REFERENCE)
     for c in cases:
-        reference[c] = fresh_rollout(c, cuda, code="published")
-        print(f"{c}: {len(reference[c])} trajectories")
+        reference[ref_key(c, quick)] = fresh_rollout(c, cuda, code="published", quick=quick)
+        print(f"{ref_key(c, quick)}: {len(reference[ref_key(c, quick)])} trajectories")
         save(REFERENCE, reference)
 
 
@@ -194,7 +214,7 @@ def cmd_paper(cases):
               f" {med(reference[c], 'rt_rmse'):11.4g}/{med(published[c], 'rt_rmse'):<11.4g}")
 
 
-def cmd_falsify(case, cuda, scale=1.005):
+def cmd_falsify(case, cuda, scale=1.005, quick=False):
     """Scale every weight by `scale`; the gate must FAIL on the result."""
     ds, _, (mdir, step), _ = CASES[case]
     src = DATA / ds / mdir
@@ -208,32 +228,34 @@ def cmd_falsify(case, cuda, scale=1.005):
             if torch.is_floating_point(v):
                 state[k] = v * scale
         torch.save(ckpt, tmp / f"model-{step}.pt")
-        current = fresh_rollout(case, cuda, tmp)
-    caught = not compare(case, current, load(REFERENCE), quiet=True)
+        current = fresh_rollout(case, cuda, tmp, quick=quick)
+    caught = not compare(case, current, load(REFERENCE), quiet=True, quick=quick)
     print(f"planted regression (weights x{scale}) {'CAUGHT' if caught else 'MISSED'}")
     return caught
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["run", "reference", "paper", "extract", "falsify"])
+    ap.add_argument("command", choices=["run", "quick", "reference", "paper", "extract", "falsify"])
     ap.add_argument("cases", nargs="*", help=f"default: all of {list(CASES)}")
     ap.add_argument("--cuda", type=int, default=0)
+    ap.add_argument("--quick", action="store_true", help="quick-tier variant")
     a = ap.parse_args()
-    cases = a.cases or list(CASES)
+    quick = a.quick or a.command == "quick"
+    cases = a.cases or (list(QUICK) if quick else list(CASES))
     unknown = set(cases) - set(CASES)
-    if unknown:
-        sys.exit(f"unknown case(s): {sorted(unknown)}")
-    if a.command == "run":
-        sys.exit(0 if cmd_run(cases, a.cuda) else 1)
+    if unknown or (quick and set(cases) - set(QUICK)):
+        sys.exit(f"unknown case(s) for this tier: {sorted(set(cases) - set(QUICK if quick else CASES))}")
+    if a.command in ("run", "quick"):
+        sys.exit(0 if cmd_run(cases, a.cuda, quick) else 1)
     if a.command == "extract":
         cmd_extract(cases)
     if a.command == "reference":
-        cmd_reference(cases, a.cuda)
+        cmd_reference(cases, a.cuda, quick)
     if a.command == "paper":
         cmd_paper(cases)
     if a.command == "falsify":
-        sys.exit(0 if all(cmd_falsify(c, a.cuda) for c in cases) else 1)
+        sys.exit(0 if all(cmd_falsify(c, a.cuda, quick=quick) for c in cases) else 1)
 
 
 if __name__ == "__main__":
