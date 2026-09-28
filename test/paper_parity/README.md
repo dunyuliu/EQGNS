@@ -46,8 +46,12 @@ Checkpoints are byte-identical (CRC32) to the Zenodo archive
 (doi:10.5281/zenodo.17095311). The 40 km fault case is not gated: its test set
 is not on disk.
 
-## Known failure
+## Dataset padding
 
-The post-publication rollout speed-up (`1b3fb9e`) caches `node_property` at
-step 0; D2/D3 data carry a time-varying `node_property`, so the current code
-differs from the paper's code on `M2_D3` and `M3_D2` (xfail in pytest).
+The prepared test sets end each scenario with 72 padded frames (steps 755-826:
+zero velocity, invalid `node_coords`/`cells`/`node_property`). The published
+code rebuilds the graph each step and so reads them; the current code caches
+the step-0 mesh. Both are bit-identical over steps 0-754, so metrics use only
+the unpadded steps (`valid_steps` in `gate.py`). Including the padded frames
+dilutes MSE by 826/755 (about 9%), since both predictions and ground truth are
+near zero there.
