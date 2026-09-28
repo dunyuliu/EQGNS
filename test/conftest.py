@@ -38,3 +38,10 @@ def pytest_configure(config):
         "markers", "physical: physical-behaviour / invariant test")
     config.addinivalue_line(
         "markers", "slow: not required for the fast local loop, but always run in CI")
+    config.addinivalue_line(
+        "markers", "paper_parity: reruns published checkpoints (opt-in, see test/paper_parity/README.md)")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--paper-parity", action="store_true", default=False,
+                     help="run the paper-parity gate (needs gns-sample/ and a GPU)")
