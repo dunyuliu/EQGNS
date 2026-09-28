@@ -22,12 +22,15 @@ rupture-time RMSE / missed / false node counts at 0.1 m/s
 (utils/plot.rupture.dynamics.py), over the unpadded steps (see valid_steps).
 """
 import argparse
+import queue
+from concurrent.futures import ThreadPoolExecutor
 import json
 import pickle
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -43,7 +46,7 @@ DT = 0.0167777          # utils/plot.rupture.dynamics.py
 THRESHOLD = 0.1         # m/s, SLIPRATE_THRESHOLD
 UNREACHED = 1000.0
 # quick tier: the trajectory per model most sensitive to perturbation, truncated
-QUICK = {"M1_D1": 4, "M2_D3": 14, "M3_D2": 7}
+QUICK = {"M1_D1": 4, "M2_D3": 14, "M3_D3": 7}
 QUICK_STEPS = 300
 KEYS = ["mse_vx", "rt_rmse", "missed", "false"]
 REL_TOL = 1e-4          # current vs published code: float reassociation only
@@ -65,12 +68,12 @@ CASES = {
               "rollouts.nmp10.cotopaxi"),
     "M2_checkerboard": ("case4.200m.multi.asp.homo.a.Vw", "test.npz", M2,
                         "rollouts.nmp10.cotopaxi"),
-    "M3_D2": (D2_160, "test.npz", M3,
+    # this directory's test.npz is byte-identical to the D3 fractal test set
+    "M3_D3": (D2_160, "test.npz", M3,
               "rollouts.nmp10.lr3e-5.b8.cotopaxi.r1.published"),
+    # (.case3.others.test holds a byte-identical copy of this test set)
     "M3_D1hypo": (D2_160 + ".case3.test", "test.npz", M3,
                   "rollouts.nmp10.lr3e-5.b8.cotopaxi.r1"),
-    "M3_D1hypo_others": (D2_160 + ".case3.others.test", "test.npz", M3,
-                         "rollouts.nmp10.lr3e-5.b8.cotopaxi.r1.published"),
 }
 
 
@@ -175,21 +178,40 @@ def save(path, obj):
     path.write_text(json.dumps(obj, indent=1) + "\n")
 
 
-def cmd_run(cases, cuda, quick=False):
+def parallel(fn, cases, gpus):
+    """Run fn(case, gpu) for each case, one case per GPU at a time."""
+    free = queue.Queue()
+    for g in gpus:
+        free.put(g)
+
+    def task(case):
+        g = free.get()
+        try:
+            return fn(case, g)
+        finally:
+            free.put(g)
+    with ThreadPoolExecutor(len(gpus)) as ex:
+        return dict(zip(cases, ex.map(task, cases)))
+
+
+def cmd_run(cases, gpus, quick=False):
     reference = load(REFERENCE)
-    results = {c: compare(c, fresh_rollout(c, cuda, quick=quick), reference, quick=quick)
-               for c in cases}
+    t0 = time.time()
+    rollouts = parallel(lambda c, g: fresh_rollout(c, g, quick=quick), cases, gpus)
+    print(f"rollouts: {len(cases)} cases on GPUs {gpus} in {time.time() - t0:.0f} s")
+    results = {c: compare(c, rollouts[c], reference, quick=quick) for c in cases}
     for c, ok in results.items():
         print(f"{c}: {'PASS' if ok else 'FAIL'}")
     return all(results.values())
 
 
-def cmd_reference(cases, cuda, quick=False):
+def cmd_reference(cases, gpus, quick=False):
     reference = load(REFERENCE)
+    rollouts = parallel(lambda c, g: fresh_rollout(c, g, code="published", quick=quick), cases, gpus)
     for c in cases:
-        reference[ref_key(c, quick)] = fresh_rollout(c, cuda, code="published", quick=quick)
-        print(f"{ref_key(c, quick)}: {len(reference[ref_key(c, quick)])} trajectories")
-        save(REFERENCE, reference)
+        reference[ref_key(c, quick)] = rollouts[c]
+        print(f"{ref_key(c, quick)}: {len(rollouts[c])} trajectories")
+    save(REFERENCE, reference)
 
 
 def cmd_extract(cases):
@@ -238,24 +260,25 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["run", "quick", "reference", "paper", "extract", "falsify"])
     ap.add_argument("cases", nargs="*", help=f"default: all of {list(CASES)}")
-    ap.add_argument("--cuda", type=int, default=0)
+    ap.add_argument("--cuda", default="0", help="GPU id(s), comma-separated; cases run in parallel")
     ap.add_argument("--quick", action="store_true", help="quick-tier variant")
     a = ap.parse_args()
+    gpus = [int(g) for g in a.cuda.split(",")]
     quick = a.quick or a.command == "quick"
     cases = a.cases or (list(QUICK) if quick else list(CASES))
     unknown = set(cases) - set(CASES)
     if unknown or (quick and set(cases) - set(QUICK)):
         sys.exit(f"unknown case(s) for this tier: {sorted(set(cases) - set(QUICK if quick else CASES))}")
     if a.command in ("run", "quick"):
-        sys.exit(0 if cmd_run(cases, a.cuda, quick) else 1)
+        sys.exit(0 if cmd_run(cases, gpus, quick) else 1)
     if a.command == "extract":
         cmd_extract(cases)
     if a.command == "reference":
-        cmd_reference(cases, a.cuda, quick)
+        cmd_reference(cases, gpus, quick)
     if a.command == "paper":
         cmd_paper(cases)
     if a.command == "falsify":
-        sys.exit(0 if all(cmd_falsify(c, a.cuda, quick=quick) for c in cases) else 1)
+        sys.exit(0 if all(cmd_falsify(c, gpus[0], quick=quick) for c in cases) else 1)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ Checks that the current `meshnet` code reproduces the published GNS results
 ```bash
 source venv/bin/activate
 python3 test/paper_parity/gate.py quick            # ~1 min: every edit to meshnet/
-python3 test/paper_parity/gate.py run              # ~4 h: all 8 cases, before a release
+python3 test/paper_parity/gate.py run --cuda 0,1,2,3   # all 7 cases in parallel, before a release
 python3 test/paper_parity/gate.py run M1_D1        # one case
 pytest test/paper_parity --paper-parity -q         # same, via pytest
 ```
@@ -32,7 +32,7 @@ bit-identical.
   as a sanity check that the reference itself reproduces the paper.
 - `gate.py falsify M1_D1`: scales all weights by 1.005; the gate must FAIL.
 - `gate.py quick`: the most perturbation-sensitive trajectory of each model
-  (M1_D1 #4, M2_D3 #14, M3_D2 #7), first 300 steps. `falsify --quick` confirms
+  (M1_D1 #4, M2_D3 #14, M3_D3 #7), first 300 steps. `falsify --quick` confirms
   it still catches the planted regression on all three.
 
 If the GPU, CUDA or torch version changes, regenerate `reference.json`: it
@@ -44,7 +44,7 @@ comes from the paper's own code, so regenerating it is safe.
 |---|---|---|
 | `M1_D1`, `M1_small` | M1 (D1, 3M steps) | D1 hypocenters; 10 x 5 km fault |
 | `M2_D2`, `M2_D3`, `M2_checkerboard` | M2 (D2, 30 scenarios, 3M) | unseen asperity stress; fractal stress; checkerboard |
-| `M3_D2`, `M3_D1hypo`, `M3_D1hypo_others` | M3 (D2, 148 scenarios, 2.7M) | unseen asperity stress; D1 hypocenter cross-tests |
+| `M3_D3`, `M3_D1hypo` | M3 (D2, 148 scenarios, 2.7M) | fractal stress; D1 hypocenter cross-test |
 
 Checkpoints are byte-identical (CRC32) to the Zenodo archive
 (doi:10.5281/zenodo.17095311). The 40 km fault case is not gated: its test set
