@@ -53,7 +53,28 @@ once available (in progress as of this commit).
 - Deliverable: a short results table in a PR (data + a README note only if
   the effect is real), not a notes dump.
 
-## Status
-Launched 2026-09-29. Training in progress. This file will be updated with
-it/s measurement, concurrency decision, and progress checkpoints as the
-campaign continues across conductor wake-ups.
+## Concurrency decision (measured, 2026-09-29)
+Launched all 6 concurrently on GPU 2 first, per owner instruction to try
+that and measure. `fixed_seed0` crashed with `CUDA out of memory` within
+minutes (GPU 2 already carried 2 unrelated jobs at launch time, ~6.2 GB,
+before adding 6 more at ~5-7 GB each). Killed all 6, wiped the partial
+logs/state, and fell back to the owner-specified fallback: **3 concurrent**.
+
+Measured at 3-concurrent, all three seeds simultaneously, steps 0-4000:
+**~220 ms/step (4.5 it/s) per run**, stable, no crashes, ~14m39s wall for
+4000 steps each. This is ~2.4x slower per run than the single-run contended
+baseline measured earlier (91 ms/step), but 3x the parallelism nets ~1.25x
+more effective aggregate throughput than running one at a time.
+
+Projected wall-clock: 500,000 steps x 0.220 s/step = ~30.6 h per batch of 3.
+Plan: fixed-D1 arm (seeds 0,1,2) runs first batch, then old-D1 arm (seeds
+0,1,2) second batch, sequentially -- **~61 h (~2.5 days) total**, run
+directories/PIDs below.
+
+## Status (2026-09-29, updated)
+Batch 1 (fixed-D1, seeds 0/1/2) launched clean at 08:28 CDT, PIDs 3212806
+(seed0), 3212808 (seed1), 3212809 (seed2). Stable through step 4000+ at
+time of writing. First checkpoint (step 50,000) expected ~08:28 + 3.1h ≈
+11:35 CDT. Batch 2 (old-D1 control) launches once batch 1 completes.
+Evaluation (deterministic rollout + gate.py metrics at each 50k-step
+checkpoint) begins once matching checkpoints exist for both arms.
