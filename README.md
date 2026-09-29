@@ -53,7 +53,7 @@ The earthquake-specific pipeline, end to end:
 
 - The exact code and dataset archived at publication are on Zenodo: https://doi.org/10.5281/zenodo.17095311
 - `meshnet/train.py.published` is a snapshot of `meshnet/train.py` as used for the paper; the current `meshnet/train.py` adds inference-speed optimizations that are mathematically equivalent (see `CLAUDE.md` for details).
-- Environments: `requirements.txt` (unpinned numpy, local servers) vs. `requirements.dl.txt` (pinned `numpy==1.23.1`); the numpy pin is the only intended difference. `gns_env.yml` records a conda environment; `build_venv.sh` / `build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.
+- Environments: `requirements.txt` (`numpy>=2.2.3`, local servers) vs. `requirements.dl.txt` (exact-pinned `numpy==2.2.3`); the numpy pin is the only intended difference, every other entry is pinned identically in both files to the validated stack below. `gns_env.yml` records a conda environment; `build_venv.sh` / `build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.
 
 ## Introduction
 Graph Network-based Simulator (GNS) is a generalizable, efficient, and accurate machine learning (ML)-based surrogate simulator for particle- and mesh-based physical systems using Graph Neural Networks (GNNs). GNS has shown remarkable generability to simulated fluid, solid, deformables, particle systems with significant speedup comparing to traditional physics-based counterparts. GNS exploits distributed data parallelism to achieve fast multi-GPU training.
