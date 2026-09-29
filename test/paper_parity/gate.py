@@ -50,6 +50,7 @@ QUICK = {"M1_D1": 4, "M2_D3": 14, "M3_D3": 7}
 QUICK_STEPS = 300
 KEYS = ["mse_vx", "rt_rmse", "missed", "false"]
 REL_TOL = 1e-4          # current vs published code: float reassociation only
+COLLAPSE_TOL = 0.5      # var(pred)/var(gt) below this: flat/degenerate forecast (owner-set, do not tune)
 
 M1 = ("models.nmp10.cotopaxi", 3000000)
 M2 = ("models.nmp10.cotopaxi", 3000000)
@@ -102,11 +103,31 @@ def metrics(pkl):
     rt_pr = rupture_time(np.linalg.norm(np.concatenate([init, pred]), axis=-1))
     hit_gt, hit_pr = rt_gt < UNREACHED, rt_pr < UNREACHED
     both = hit_gt & hit_pr
+    # Collapse guard (owner, citing dynamo_gns Rule 22 cl.7-8): a model that
+    # predicts a near-constant output (e.g. near-zero velocity everywhere)
+    # can still score a deceptively low mse_vx if ground truth is also
+    # mostly small/quiet -- MSE alone can't tell "tracking the signal" from
+    # "collapsed to a low-variance constant". Reduction: population variance
+    # per channel (vx, vy) over all (steps, nodes), then the WORSE (min) of
+    # the two channel ratios -- mse_vx only ever looks at vx, so a channel-
+    # mixed reduction here could hide a collapse in vy; taking the min means
+    # collapse in either channel is caught. Where gt itself has ~zero
+    # variance (degenerate ground truth, not a model failure), the ratio is
+    # defined as 1.0 if pred also has ~zero variance, else left uncapped
+    # (not treated as collapse).
+    var_gt = np.var(gt, axis=(0, 1))
+    var_pred = np.var(pred, axis=(0, 1))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio_ch = np.where(var_gt > 0, var_pred / np.where(var_gt > 0, var_gt, 1.0),
+                             np.where(var_pred > 0, np.inf, 1.0))
+    var_ratio = float(np.min(ratio_ch))
     return {
         "mse_vx": float(np.mean((pred[..., 0] - gt[..., 0]) ** 2)),
         "rt_rmse": float(np.sqrt(np.mean((rt_gt[both] - rt_pr[both]) ** 2))) if both.any() else 0.0,
         "missed": int(np.sum(hit_gt & ~hit_pr)),
         "false": int(np.sum(~hit_gt & hit_pr)),
+        "var_ratio": var_ratio,
+        "collapsed": bool(var_ratio < COLLAPSE_TOL),
     }
 
 
@@ -164,9 +185,12 @@ def compare(case, current, reference, rel_tol=REL_TOL, quiet=False, quick=False)
     for i, (cur, r) in enumerate(zip(current, ref)):
         bad = [f"{k} {r[k]:.6g}->{cur[k]:.6g}" for k in KEYS
                if abs(cur[k] - r[k]) > rel_tol * max(abs(r[k]), 1.0)]
+        if cur.get("collapsed"):
+            bad.append(f"collapsed var_ratio={cur['var_ratio']:.3g} < {COLLAPSE_TOL}")
         ok &= not bad
         if bad or not quiet:
-            print(f"  [{case}] traj {i}: {'PASS' if not bad else 'FAIL ' + '; '.join(bad)}")
+            print(f"  [{case}] traj {i}: {'PASS' if not bad else 'FAIL ' + '; '.join(bad)}"
+                  f" (var_ratio={cur.get('var_ratio', float('nan')):.3g})")
     return ok
 
 
