@@ -118,9 +118,13 @@ class TrajectoriesDataset(torch.utils.data.Dataset):
 
         return trajectory
 
-def get_data_loader_by_samples(path, input_length_sequence, dt, batch_size, shuffle=True):
+def get_data_loader_by_samples(path, input_length_sequence, dt, batch_size, shuffle=True, generator=None):
+    """generator: optional torch.Generator driving the shuffle order (meshnet/seeding.py).
+    Default None preserves the legacy unseeded shuffle exactly (torch.utils.data.DataLoader
+    treats a missing/None generator as its own unseeded default)."""
     dataset = SamplesDataset(path, input_length_sequence, dt)
-    return torch_geometric.loader.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    return torch_geometric.loader.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
+                                              generator=generator)
 
 def get_data_loader_by_trajectories(path):
     dataset = TrajectoriesDataset(path)

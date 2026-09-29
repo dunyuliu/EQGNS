@@ -17,6 +17,7 @@ import json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from meshnet import data_loader
 from meshnet import learned_simulator
+from meshnet import seeding
 from meshnet.noise import get_velocity_noise
 from meshnet.utils import datas_to_graph
 from meshnet.utils import NodeType
@@ -36,6 +37,14 @@ flags.DEFINE_integer("cuda_device_number", None, help="CUDA device (zero indexed
 flags.DEFINE_string('rollout_filename', "rollout", help='Name saving the rollout')
 flags.DEFINE_integer('ntraining_steps', int(1E7), help='Number of training steps.')
 flags.DEFINE_integer('nsave_steps', int(5000), help='Number of steps at which to save the model.')
+flags.DEFINE_integer('seed', None, help=(
+    'Opt-in RNG seed (meshnet/seeding.py). Default None: unseeded, byte-identical to '
+    'pre-seeding behaviour. When set, model init, training/validation sample order, and '
+    'training noise are each seeded from an independent sub-stream derived from this seed, '
+    'and their RNG state is checkpointed in train_state-<step>.pt for exact resume.'))
+flags.DEFINE_boolean('deterministic', False, help=(
+    'Only meaningful with --seed set. Additionally asks torch for deterministic kernels '
+    '(warn-only); see meshnet/seeding.py:set_deterministic.'))
 FLAGS = flags.FLAGS
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -199,6 +208,19 @@ def train(simulator):
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
+    # Opt-in seeding (meshnet/seeding.py). FLAGS.seed=None (default): every generator
+    # below stays None, which is the exact legacy unseeded call signature everywhere
+    # it is threaded through (data_loader.get_data_loader_by_samples(generator=None),
+    # get_velocity_noise(generator=None)) -- default behaviour is unchanged.
+    train_generator = None
+    valid_generator = None
+    noise_generator = None
+    if FLAGS.seed is not None:
+        seed_streams = seeding.sub_seeds(FLAGS.seed)
+        train_generator = seeding.torch_generator(seed_streams["data_train"])
+        valid_generator = seeding.torch_generator(seed_streams["data_valid"])
+        noise_generator = seeding.torch_generator(seed_streams["noise"])
+
     # If model_path does exist and model_file and train_state_file exist continue training.
     if FLAGS.model_file is not None:
 
@@ -227,6 +249,16 @@ def train(simulator):
             optimizer_to(optimizer, device)
             # set global train state
             step = train_state["global_train_state"].pop("step")
+            # Restore RNG streams so a resumed run continues them instead of
+            # restarting (meshnet/seeding.py). Only present/restored when this
+            # run opts in via --seed; absent for pre-existing train_state files.
+            if FLAGS.seed is not None and "rng_state" in train_state:
+                seeding.restore(
+                    train_state["rng_state"],
+                    {"data_train": train_generator, "data_valid": valid_generator,
+                     "noise": noise_generator},
+                    {})
+                print("Resumed RNG streams from train_state.")
         else:
             raise FileNotFoundError(
                 f"Specified model_file {model_path + FLAGS.model_file} and train_state_file {model_path + FLAGS.train_state_file} not found.")
@@ -238,12 +270,14 @@ def train(simulator):
     ds = data_loader.get_data_loader_by_samples(path=f'{FLAGS.data_path}/{FLAGS.mode}.npz',
                                                 input_length_sequence=INPUT_SEQUENCE_LENGTH,
                                                 dt=dt,
-                                                batch_size=FLAGS.batch_size)
+                                                batch_size=FLAGS.batch_size,
+                                                generator=train_generator)
 
     ds_valid = data_loader.get_data_loader_by_samples(path=f'{FLAGS.data_path}/valid.npz',
                                                       input_length_sequence=INPUT_SEQUENCE_LENGTH,
                                                       dt=dt,
-                                                      batch_size=FLAGS.batch_size)
+                                                      batch_size=FLAGS.batch_size,
+                                                      generator=valid_generator)
     not_reached_nsteps = True
     try:
         while not_reached_nsteps:
@@ -262,7 +296,8 @@ def train(simulator):
                 target_velocities = graph.y
 
                 # Get velocity noise
-                velocity_noise = get_velocity_noise(graph, noise_std=noise_std, device=device)
+                velocity_noise = get_velocity_noise(graph, noise_std=noise_std, device=device,
+                                                     generator=noise_generator)
                 #print('before predict_acceleration in train loop')
                 #print(node_types, node_types.shape)
                 #print(node_property, node_property.shape)
@@ -284,7 +319,8 @@ def train(simulator):
                 # validation 
                 if step % loss_report_step == 0:
                     sampled_valid_example = next(iter(ds_valid))
-                    valid_loss = validation(simulator, sampled_valid_example, device)
+                    valid_loss = validation(simulator, sampled_valid_example, device,
+                                             noise_generator=noise_generator)
                     #valid_loss_hist.append(valid_loss)
 
                 loss = acceleration_loss(pred_acc, target_acc, non_kinematic_mask)
@@ -316,7 +352,24 @@ def train(simulator):
                 # Save model state
                 if step % FLAGS.nsave_steps == 0:
                     simulator.save(model_path + 'model-' + str(step) + '.pt')
-                    train_state = dict(optimizer_state=optimizer.state_dict(), global_train_state={"step": step})
+                    # Resume off-by-one fix: this step's optimizer.step() has already been
+                    # applied above (line ~303) by the time we get here, so the state we are
+                    # about to save reflects "step" fully processed. Record step+1 as the
+                    # resume point, so `step = train_state["global_train_state"].pop("step")`
+                    # re-enters the loop at the FIRST UNPROCESSED step, not at "step" again
+                    # (the pre-fix code saved plain `step`, which caused resume to redo this
+                    # step's gradient update a second time and then immediately overwrite
+                    # this very model-<step>.pt/train_state-<step>.pt with the doubly-updated
+                    # state). The saved checkpoint FILENAME is left as `step` (unchanged) --
+                    # only the resume-point integer inside train_state changes.
+                    train_state = dict(optimizer_state=optimizer.state_dict(),
+                                        global_train_state={"step": step + 1})
+                    if FLAGS.seed is not None:
+                        train_state["seed"] = FLAGS.seed
+                        train_state["rng_state"] = seeding.capture(
+                            {"data_train": train_generator, "data_valid": valid_generator,
+                             "noise": noise_generator},
+                            {})
                     torch.save(train_state, f"{model_path}train_state-{step}.pt")
 
                 # Complete training
@@ -347,7 +400,8 @@ def train(simulator):
 def validation(
     simulator,
     graph,
-    device
+    device,
+    noise_generator=None
     ):
     graph = transformer(graph.to(device))
     node_types = graph.x[:, 0]  # (nnodes, )
@@ -358,7 +412,8 @@ def validation(
     target_velocities = graph.y  # (nnodes, 2)
 
     # Get velocity noise
-    velocity_noise = get_velocity_noise(graph, noise_std=noise_std, device=device)  
+    velocity_noise = get_velocity_noise(graph, noise_std=noise_std, device=device,
+                                         generator=noise_generator)
     pred_acc, target_acc = simulator.predict_acceleration(
         current_velocities=current_velocities,
         node_type=node_types,
@@ -434,6 +489,13 @@ def main(_):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if FLAGS.cuda_device_number is not None and torch.cuda.is_available():
         device = torch.device(f'cuda:{int(FLAGS.cuda_device_number)}')
+
+    # Opt-in seeding (meshnet/seeding.py): default FLAGS.seed=None leaves model init
+    # exactly as unseeded as before. When set, seed the "init" sub-stream right before
+    # building the model so its weight initialization is fixed by the seed.
+    if FLAGS.seed is not None:
+        seeding.set_deterministic(FLAGS.deterministic)
+        seeding.seed_global(seeding.sub_seeds(FLAGS.seed)["init"])
 
     # load simulator
     simulator = learned_simulator.MeshSimulator(
