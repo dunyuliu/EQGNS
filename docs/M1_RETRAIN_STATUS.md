@@ -71,10 +71,34 @@ Plan: fixed-D1 arm (seeds 0,1,2) runs first batch, then old-D1 arm (seeds
 0,1,2) second batch, sequentially -- **~61 h (~2.5 days) total**, run
 directories/PIDs below.
 
-## Status (2026-09-29, updated)
-Batch 1 (fixed-D1, seeds 0/1/2) launched clean at 08:28 CDT, PIDs 3212806
-(seed0), 3212808 (seed1), 3212809 (seed2). Stable through step 4000+ at
-time of writing. First checkpoint (step 50,000) expected ~08:28 + 3.1h ≈
-11:35 CDT. Batch 2 (old-D1 control) launches once batch 1 completes.
-Evaluation (deterministic rollout + gate.py metrics at each 50k-step
-checkpoint) begins once matching checkpoints exist for both arms.
+## Status (2026-09-29, updated -- both batches now running concurrently)
+Owner correction: this box's other GPU jobs are all the owner's own
+(CycleGNS, dynamo_gns), no other users; GPU 1 was confirmed idle
+(0% util) and approved for batch 2 immediately, rather than waiting for
+batch 1 to finish. Verified independently before launch (`nvidia-smi`):
+GPU 1 at 1417 MiB / 0% util (one small pre-existing owner process, PID
+3848742, ~1.4 GB -- not the "5 MiB" the correction estimated, but 0% util,
+consistent with "idle" and safe to add 3 more runs).
+
+Batch 1 (fixed-D1, seeds 0/1/2): GPU 2, launched 08:28 CDT, PIDs 3212806/
+3212808/3212809. ~220 ms/step (4.5 it/s) per run. Stable through step
+43,000+ at time of writing, `model-0.pt` saved, next checkpoint (step
+50,000) imminent (~11:35 CDT).
+
+Batch 2 (old-D1 control, seeds 0/1/2): GPU 1, launched 10:49 CDT, PIDs
+3857724/3857726/3857727. ~234 ms/step (4.3 it/s) per run, consistent with
+batch 1's rate. Stable through step 4,000+, no OOM.
+
+**GPU utilization check (owner's "use the resource well" ask)**: both
+GPU 1 and GPU 2 measured at a sustained **100%** utilization (3 samples
+each, 3s apart) with just the 3 training runs per GPU -- neither is
+"well under ~90%". Per the owner's own stated condition, evaluation
+rollouts are NOT being added to either GPU right now (would contend with
+and slow the training runs); deferred until a GPU frees up (a batch
+finishing, or a measured utilization drop). GPUs 0 and 3 untouched, no new
+work added there, per instruction.
+
+Evaluation (deterministic rollout + gate.py metrics, including the collapse
+guard, at each 50k-step checkpoint) begins once (a) a GPU has real spare
+capacity and (b) matching checkpoints exist for both arms at the same step
+count.
