@@ -63,6 +63,13 @@ CASES = {
               "rollouts.nmp10.cotopaxi"),
     "M1_small": ("case3.200m.homo.a.Vw.others", "case3.200m.small.npz", M1,
                  "rollouts.nmp10.cotopaxi.small.D1.T_small"),
+    # 40 km fault "H14.large" scenario, single 827-frame trajectory,
+    # regenerated this session with a zero-tail padding bug fixed (827 real
+    # frames, no padding). The committed published rollout was rolled out on
+    # the OLD, shorter/padded npz, so it cannot be reproduced by the normal
+    # reference.json mechanism -- see TRUNCATE_TO_PUBLISHED.
+    "M1_large": ("case3.200m.homo.a.Vw.others", "case3.200m.large.npz", M1,
+                 "rollouts.nmp10.cotopaxi.large.published"),
     "M2_D2": ("case4.200m.multi.stress.homo.a.Vw", "test.npz", M2,
               "rollouts.nmp10.cotopaxi.published"),
     "M2_D3": ("case4.200m.fractal.stress.homo.a.Vw", "test.npz", M2,
@@ -94,8 +101,12 @@ def valid_steps(pkl):
     return int(np.argmax(moved)) if moved.any() else len(c) - 1
 
 
-def metrics(pkl):
-    n = valid_steps(pkl)
+def metrics(pkl, n_override=None):
+    """n_override: score only the first n steps instead of valid_steps(pkl) --
+    used for cases gated against a published rollout shorter than the
+    current one (see TRUNCATE_TO_PUBLISHED); all other call sites pass
+    n_override=None and get exactly today's behaviour."""
+    n = valid_steps(pkl) if n_override is None else n_override
     pred = np.asarray(pkl["predicted_rollout"], dtype=np.float64)[:n]
     gt = np.asarray(pkl["ground_truth_rollout"], dtype=np.float64)[:n]
     init = np.asarray(pkl["initial_velocities"], dtype=np.float64)
@@ -147,8 +158,12 @@ def write_quick_npz(src, dst, traj):
     np.savez(dst, trajectory0={k: np.asarray(v)[:QUICK_STEPS + 1] for k, v in t.items()})
 
 
-def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False):
-    """Deterministic rollout of one case with `code`; return per-trajectory metrics."""
+def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False, n_overrides=None):
+    """Deterministic rollout of one case with `code`; return per-trajectory metrics.
+
+    n_overrides: optional per-trajectory step-count list (same order as
+    pkls_in(out_dir)) passed to metrics() as n_override; None (default) for
+    every case except TRUNCATE_TO_PUBLISHED."""
     ds, npz, (mdir, step), _ = CASES[case]
     model_dir = model_dir or DATA / ds / mdir
     with tempfile.TemporaryDirectory() as data_dir:  # meshnet reads <data_path>/test.npz
@@ -164,23 +179,47 @@ def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False
         if r.returncode:
             sys.exit(f"[{case}] rollout failed:\n{r.stderr[-3000:]}")
     out = []
-    for p in pkls_in(out_dir):
+    for i, p in enumerate(pkls_in(out_dir)):
         with open(p, "rb") as f:
-            out.append(metrics(pickle.load(f)))
+            pkl = pickle.load(f)
+        out.append(metrics(pkl, n_overrides[i] if n_overrides is not None else None))
     return out
 
 
-def fresh_rollout(case, cuda, model_dir=None, code="current", quick=False):
+def fresh_rollout(case, cuda, model_dir=None, code="current", quick=False, n_overrides=None):
     with tempfile.TemporaryDirectory() as out:
-        return run_rollout(case, out, cuda, model_dir, code, quick)
+        return run_rollout(case, out, cuda, model_dir, code, quick, n_overrides)
 
 
 def ref_key(case, quick):
     return f"{case}@quick" if quick else case
 
 
-def compare(case, current, reference, rel_tol=REL_TOL, quiet=False, quick=False):
-    ref = reference[ref_key(case, quick)]
+# Cases gated directly against a committed published-rollout directory,
+# truncated to that rollout's own valid (unpadded) steps, instead of against
+# reference.json. M1_large's npz was regenerated to fix a zero-tail padding
+# bug and now legitimately rolls out further than the committed published
+# rollout has ground truth for; there is no oracle for those extra steps, so
+# both sides of the comparison are restricted to the published rollout's
+# original (shorter) window.
+TRUNCATE_TO_PUBLISHED = {"M1_large"}
+
+
+def published_reference(case):
+    """Ground truth for TRUNCATE_TO_PUBLISHED cases: metrics of the committed
+    published rollout pkls (each truncated to its own valid_steps), plus the
+    per-trajectory step counts to also apply to a fresh current-code rollout
+    so both sides are scored over the same window."""
+    pkls = []
+    for p in pkls_in(published_dir(case)):
+        with open(p, "rb") as f:
+            pkls.append(pickle.load(f))
+    n_overrides = [valid_steps(pkl) for pkl in pkls]
+    rows = [metrics(pkl, n) for pkl, n in zip(pkls, n_overrides)]
+    return rows, n_overrides
+
+
+def compare(case, current, ref, rel_tol=REL_TOL, quiet=False):
     ok = len(current) == len(ref)
     for i, (cur, r) in enumerate(zip(current, ref)):
         bad = [f"{k} {r[k]:.6g}->{cur[k]:.6g}" for k in KEYS
@@ -220,10 +259,17 @@ def parallel(fn, cases, gpus):
 
 def cmd_run(cases, gpus, quick=False):
     reference = load(REFERENCE)
+    truncated = {c: published_reference(c) for c in cases if c in TRUNCATE_TO_PUBLISHED}
     t0 = time.time()
-    rollouts = parallel(lambda c, g: fresh_rollout(c, g, quick=quick), cases, gpus)
+    rollouts = parallel(
+        lambda c, g: fresh_rollout(c, g, quick=quick,
+                                    n_overrides=truncated[c][1] if c in truncated else None),
+        cases, gpus)
     print(f"rollouts: {len(cases)} cases on GPUs {gpus} in {time.time() - t0:.0f} s")
-    results = {c: compare(c, rollouts[c], reference, quick=quick) for c in cases}
+    results = {}
+    for c in cases:
+        ref_rows = truncated[c][0] if c in truncated else reference[ref_key(c, quick)]
+        results[c] = compare(c, rollouts[c], ref_rows)
     for c, ok in results.items():
         print(f"{c}: {'PASS' if ok else 'FAIL'}")
     return all(results.values())
@@ -264,6 +310,10 @@ def cmd_falsify(case, cuda, scale=1.005, quick=False):
     """Scale every weight by `scale`; the gate must FAIL on the result."""
     ds, _, (mdir, step), _ = CASES[case]
     src = DATA / ds / mdir
+    if case in TRUNCATE_TO_PUBLISHED:
+        ref_rows, n_overrides = published_reference(case)
+    else:
+        ref_rows, n_overrides = load(REFERENCE)[ref_key(case, quick)], None
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         shutil.copy(src / "config.json", tmp)
@@ -274,8 +324,8 @@ def cmd_falsify(case, cuda, scale=1.005, quick=False):
             if torch.is_floating_point(v):
                 state[k] = v * scale
         torch.save(ckpt, tmp / f"model-{step}.pt")
-        current = fresh_rollout(case, cuda, tmp, quick=quick)
-    caught = not compare(case, current, load(REFERENCE), quiet=True, quick=quick)
+        current = fresh_rollout(case, cuda, tmp, quick=quick, n_overrides=n_overrides)
+    caught = not compare(case, current, ref_rows, quiet=True)
     print(f"planted regression (weights x{scale}) {'CAUGHT' if caught else 'MISSED'}")
     return caught
 
