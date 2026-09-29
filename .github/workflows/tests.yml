@@ -19,8 +19,8 @@ jobs:
         run: |
           pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
           pip install torch_geometric==2.6.1
-          pip install torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
-          pip install absl-py numpy dm-tree matplotlib pyevtk pytest tqdm toml
+          pip install torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6.3 -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
+          pip install absl-py==2.1.0 numpy==2.2.3 dm-tree==0.1.9 matplotlib==3.10.1 pyevtk==1.6.0 pytest==8.3.5 tqdm==4.67.1 toml==0.10.2
       - name: Fast tier
         run: pytest test/ -m "not slow" -q
       - name: Full CI tier (paper-parity gate is opt-in and skipped here)
