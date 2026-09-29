@@ -22,6 +22,7 @@ rupture-time RMSE / missed / false node counts at 0.1 m/s
 (utils/plot.rupture.dynamics.py), over the unpadded steps (see valid_steps).
 """
 import argparse
+import os
 import queue
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -41,6 +42,20 @@ REPO = HERE.parents[1]
 DATA = REPO / "gns-sample"
 PUBLISHED = HERE / "published.json"   # metrics of the published rollout files
 REFERENCE = HERE / "reference.json"   # metrics of train.py.published, deterministic
+
+# Regenerated (bug-fixed) datasets that are too large / too actively-updated
+# to live under gns-sample (published, read-only, fixture-sized) still need
+# somewhere to live. This data is NOT part of any git checkout, so its
+# location can't be derived from HERE/REPO (which varies per worktree) --
+# the default below is this machine's fixed, absolute location. Override
+# with EQGNS_REGEN_DATA on any other machine. Do NOT point CASES at
+# gns-sample via ad-hoc symlinks -- those don't travel with the repo.
+REGEN_DATA = Path(os.environ.get("EQGNS_REGEN_DATA", "/home/utig5/dliu/eq_rupture_gns_data"))
+# case -> directory holding that case's regenerated dataset npz, overriding
+# the normal DATA/ds/"dataset" lookup in run_rollout().
+REGEN_DATASET_DIR = {
+    "M1_large": REGEN_DATA / "M1_large" / "dataset",
+}
 
 DT = 0.0167777          # utils/plot.rupture.dynamics.py
 THRESHOLD = 0.1         # m/s, SLIPRATE_THRESHOLD
@@ -166,11 +181,12 @@ def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False
     every case except TRUNCATE_TO_PUBLISHED."""
     ds, npz, (mdir, step), _ = CASES[case]
     model_dir = model_dir or DATA / ds / mdir
+    dataset_dir = REGEN_DATASET_DIR.get(case, DATA / ds / "dataset")
     with tempfile.TemporaryDirectory() as data_dir:  # meshnet reads <data_path>/test.npz
         if quick:
-            write_quick_npz(DATA / ds / "dataset" / npz, Path(data_dir) / "test.npz", QUICK[case])
+            write_quick_npz(dataset_dir / npz, Path(data_dir) / "test.npz", QUICK[case])
         else:
-            (Path(data_dir) / "test.npz").symlink_to(DATA / ds / "dataset" / npz)
+            (Path(data_dir) / "test.npz").symlink_to(dataset_dir / npz)
         cmd = [sys.executable, str(HERE / "det_rollout.py"), code, "--mode=rollout",
                f"--data_path={data_dir}/", f"--model_path={model_dir}/",
                f"--output_path={out_dir}/", f"--model_file=model-{step}.pt",
