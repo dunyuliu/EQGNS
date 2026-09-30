@@ -129,3 +129,15 @@ launched detached so it survives independent of any session. Will verify
 independently once armed, and again once it actually produces the 35
 result files (3 seeds x 2 arms x 5 steps + 5 published) + `ALL_DONE`
 sentinel, before assembling the final results-table PR.
+
+## Queue landed (PR #12, not merged)
+Independently re-verified (not just the subagent's report): both scripts
+diff clean against current main; queue confirmed running (PID 307971 +
+published-eval subshell PID 307981), correctly in its sentinel-poll wait,
+0% CPU between polls, no errors; both training arms confirmed still alive
+and untouched; proof-of-pipeline JSONs (quarantined under
+`eval_results/_proof_quick/`, not the real result paths) re-read directly
+-- sane numbers, no NaN/inf, matches the subagent's report exactly.
+PR: https://github.com/dunyuliu/EQGNS/pull/12. Next update when the queue
+produces real results (fixed arm finishes -> GPU2 eval begins) or when
+`ALL_DONE` appears.
