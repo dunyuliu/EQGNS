@@ -102,3 +102,30 @@ Evaluation (deterministic rollout + gate.py metrics, including the collapse
 guard, at each 50k-step checkpoint) begins once (a) a GPU has real spare
 capacity and (b) matching checkpoints exist for both arms at the same step
 count.
+
+## 2026-09-30 update -- owner-approved eval plan, queue dispatched
+Checked (2026-09-30 06:11 CDT): both arms still training, no serialization.
+Fixed arm (GPU2) at step ~374,000+; old arm (GPU1) at step ~352,000+; both
+several hours from the 500,000-step finish.
+
+Owner-approved eval plan: keep both batches running in parallel (no
+serializing training); arm a bounded background queue that waits on each
+run's `model-500000.pt` as a SENTINEL (not a loss_log poll):
+- Fixed arm finishes (frees GPU2) -> serial eval of fixed_seed{0,1,2} at
+  100k/200k/300k/400k/500k on GPU2.
+- Old arm finishes (frees GPU1) -> eval of old_seed{0,1,2} at the same 5
+  steps on whichever of GPU1/GPU2 is free.
+- Published M1 also scored at the same matching 5 steps (published
+  checkpoints DO exist at exactly 100k/200k/300k/400k/500k under
+  gns-sample/case3.200m.homo.a.Vw/models.nmp10.cotopaxi/) -- NOT the
+  3,000,000-step final published checkpoint, matched-step only.
+- All scored on the FIXED-D1 test set (same test set for both arms +
+  published, isolating the training-data effect).
+
+Dispatched building + arming this queue to a subagent (new
+`test/paper_parity/eval_m1_retrain.py` reusing gate.py's `metrics()`/
+`valid_steps()`/collapse guard, + a new sentinel-polling launcher script),
+launched detached so it survives independent of any session. Will verify
+independently once armed, and again once it actually produces the 35
+result files (3 seeds x 2 arms x 5 steps + 5 published) + `ALL_DONE`
+sentinel, before assembling the final results-table PR.
