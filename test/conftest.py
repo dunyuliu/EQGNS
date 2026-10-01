@@ -19,6 +19,13 @@ if _REPO_ROOT not in sys.path:
 if _TEST_DIR not in sys.path:
     sys.path.insert(0, _TEST_DIR)
 
+# The dataprep guard tests (test_dataprep_*.py) exec utils/prepare*.4gns.py,
+# which creates a matplotlib figure per frame. Locally that resolves to
+# TkAgg; GitHub Actions CI has no display server, so force the headless Agg
+# backend for the whole test session before anything imports pyplot.
+import matplotlib  # noqa: E402
+matplotlib.use("Agg")
+
 # The meshnet test fixtures are intentionally tiny (a dozen nodes). PyTorch's
 # default of "use every core" adds pure thread-scheduling overhead on inputs
 # this small and makes the suite slower and less reproducible run-to-run.
@@ -40,6 +47,8 @@ def pytest_configure(config):
         "markers", "slow: not required for the fast local loop, but always run in CI")
     config.addinivalue_line(
         "markers", "paper_parity: reruns published checkpoints (opt-in, see test/paper_parity/README.md)")
+    config.addinivalue_line(
+        "markers", "dataprep: guards utils/prepare*.4gns.py (EQdyna output -> npz) against regressions")
 
 
 def pytest_addoption(parser):
