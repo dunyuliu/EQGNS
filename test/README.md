@@ -23,6 +23,7 @@ a tiny synthetic dataset built on the fly by
 | 2. Integration | `integration` | `test_meshnet_integration_train_rollout.py` | real `SamplesDataset` -> `FaceToEdge`/`Cartesian`/`Distance` transformer -> `predict_acceleration` -> backward -> `optimizer.step()`; checkpoint save -> fresh simulator -> `load()` -> identical predictions; `meshnet.train.rollout()` on a `TrajectoriesDataset` example |
 | 3. End-to-end | `e2e`, `slow` | `test_meshnet_e2e_golden.py` | the real CLI (`python3 -m meshnet.train`, via a seeded wrapper) run `--mode=train` then `--mode=rollout` on a tiny deterministic dataset, diffed against a committed golden file |
 | 4. Physical-behaviour | `physical` | `test_meshnet_physical.py` | additive-acceleration identity through a real graph, zero-forcing -> zero-response asymptotic limit (mutation-verified to actually depend on the weights, not just the untrained normalizer floor), velocity-noise std vs `noise_std` |
+| 5. Data-prep guard | `dataprep` | `test_dataprep_prepare_eqdyna.py`, `test_dataprep_prepare_fractal_stress.py` | `utils/prepare.eqdyna.4gns.py` / `utils/prepare.fractal.stress.eqdyna.4gns.py`'s shared `create_train_data()` EQdyna-output -> npz conversion, on a tiny synthetic 4-node case built by `test/fixtures/dataprep/synth_case.py`: frame count, shapes/dtypes, no all-zero frames (regression guard for the zero-tail bug fixed in PR #5 / commit 1afb989), the `nskip` raw-file-to-frame offset, fractal-stress node-property lookup, and train/valid/test split disjointness |
 
 ## Running
 
@@ -43,17 +44,20 @@ pytest test/ -m unit -q
 pytest test/ -m integration -q
 pytest test/ -m e2e -q
 pytest test/ -m physical -q
+pytest test/ -m dataprep -q
 ```
 
-CI (`.circleci/config.yml`) always runs the full, unfiltered `pytest
-test/` -- the `slow` marker is for skipping locally, not for skipping in
-CI (see the pattern of `not compute_loss=False`-style opt-outs
-documented in `CLAUDE.md`: convenient locally, never the CI default).
+CI (`.github/workflows/tests.yml`) runs `pytest test/ -m "not slow" -q`
+(fast tier) and then the full, unfiltered `pytest test/ -q` -- the `slow`
+marker is for skipping locally, not for skipping in CI (see the pattern of
+`not compute_loss=False`-style opt-outs documented in `CLAUDE.md`:
+convenient locally, never the CI default).
 
-Total measured runtime of the full `test/` suite (43 tests, single CPU
-thread, this repo's `venv`): ~16s, of which ~13s is the two `python3 -m
+Total measured runtime of the full `test/` suite (63 tests, single CPU
+thread, this repo's `venv`): ~27s, of which ~13s is the two `python3 -m
 meshnet.train` subprocess launches in the e2e tier (import + torch/PyG
-startup dominates, not the tiny model itself).
+startup dominates, not the tiny model itself); the 10-test `dataprep` tier
+adds ~3s.
 
 ## The golden file (tier 3)
 
