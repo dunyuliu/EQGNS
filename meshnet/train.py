@@ -42,6 +42,11 @@ flags.DEFINE_integer('seed', None, help=(
     'pre-seeding behaviour. When set, model init, training/validation sample order, and '
     'training noise are each seeded from an independent sub-stream derived from this seed, '
     'and their RNG state is checkpointed in train_state-<step>.pt for exact resume.'))
+flags.DEFINE_integer('rollout_batch_size', 1, help=(
+    'Number of same-length test trajectories rolled out together as one disjoint graph. '
+    'Default 1: the original one-trajectory-at-a-time path, bit-identical to before. '
+    '>1: same math per trajectory, but rounding differs and long rollouts can diverge during '
+    'active rupture; use for evaluation, not for the paper-parity gate (docs/ROLLOUT_BATCHING.md).'))
 flags.DEFINE_boolean('deterministic', False, help=(
     'Only meaningful with --seed set. Additionally asks torch for deterministic kernels '
     '(warn-only); see meshnet/seeding.py:set_deterministic.'))
@@ -83,19 +88,35 @@ def predict(simulator: learned_simulator.MeshSimulator,
     # Load trajectory data.
     ds = data_loader.get_data_loader_by_trajectories(path=f"{FLAGS.data_path}{split}.npz")
 
+    def report(i, prediction_data):
+        print(f"Rollout for example{i}: loss = {prediction_data['mean_loss']} {prediction_data['mean_acc_loss']}")
+        # Save rollout in testing
+        if FLAGS.mode == 'rollout':
+            filename = f'{FLAGS.rollout_filename}_{i}.pkl'
+            filename = os.path.join(FLAGS.output_path, filename)
+            with open(filename, 'wb') as f:
+                pickle.dump(prediction_data, f)
+
     # Rollout
     with torch.no_grad():
-        for i, features in enumerate(ds):
-            nsteps = len(features[0]) - INPUT_SEQUENCE_LENGTH
-            prediction_data = rollout(simulator, features, nsteps, device)
-            print(f"Rollout for example{i}: loss = {prediction_data['mean_loss']} {prediction_data['mean_acc_loss']}")
-
-            # Save rollout in testing
-            if FLAGS.mode == 'rollout':
-                filename = f'{FLAGS.rollout_filename}_{i}.pkl'
-                filename = os.path.join(FLAGS.output_path, filename)
-                with open(filename, 'wb') as f:
-                    pickle.dump(prediction_data, f)
+        if FLAGS.rollout_batch_size <= 1:
+            for i, features in enumerate(ds):
+                nsteps = len(features[0]) - INPUT_SEQUENCE_LENGTH
+                prediction_data = rollout(simulator, features, nsteps, device)
+                report(i, prediction_data)
+        else:
+            # Batch consecutive trajectories of equal length; output order and filenames are unchanged.
+            examples = list(ds)
+            i = 0
+            while i < len(examples):
+                group = [examples[i]]
+                while (len(group) < FLAGS.rollout_batch_size and i + len(group) < len(examples)
+                       and len(examples[i + len(group)][0]) == len(group[0][0])):
+                    group.append(examples[i + len(group)])
+                nsteps = len(group[0][0]) - INPUT_SEQUENCE_LENGTH
+                for k, prediction_data in enumerate(rollout_batched(simulator, group, nsteps, device)):
+                    report(i + k, prediction_data)
+                i += len(group)
 
     print(f"Mean loss on rollout prediction: {prediction_data['mean_loss']} {prediction_data['mean_acc_loss']}")
 
@@ -117,7 +138,8 @@ def rollout(simulator: learned_simulator.MeshSimulator,
     current_velocities = initial_velocities.squeeze()
 
     nnodes = current_velocities.shape[0]
-    predictions = []
+    predictions = torch.empty((nsteps,) + tuple(current_velocities.shape),
+                              dtype=current_velocities.dtype, device=device)
 
     # OPTIMIZATION: Build graph structure once - only velocities change!
     first_example = (
@@ -133,7 +155,11 @@ def rollout(simulator: learned_simulator.MeshSimulator,
     cached_node_type = template_graph.x[:, 0]
     cached_node_property = template_graph.x[:, 1]
 
-    mask = None
+    # Boundary nodes take ground-truth velocities; the mask is static, so compute it once.
+    kinematic_mask = torch.logical_or(cached_node_type == NodeType.NORMAL,
+                                      cached_node_type == NodeType.HIGH_STRESS)
+    kinematic_mask = kinematic_mask.squeeze() if kinematic_mask.dim() > 1 else kinematic_mask
+    mask = ~kinematic_mask
 
     for step in tqdm(range(nsteps), total=nsteps):
         # Only velocity changes - everything else is cached!
@@ -146,22 +172,14 @@ def rollout(simulator: learned_simulator.MeshSimulator,
             edge_index=cached_edge_index,
             edge_features=cached_edge_attr)
 
-        # Apply boundary conditions - compute mask once
-        if mask is None:
-            kinematic_mask = torch.logical_or(cached_node_type == NodeType.NORMAL,
-                                             cached_node_type == NodeType.HIGH_STRESS)
-            kinematic_mask = kinematic_mask.squeeze() if kinematic_mask.dim() > 1 else kinematic_mask
-            mask = ~kinematic_mask  # boundary nodes
-
         # Apply ground truth velocities at boundary nodes
         predicted_next_velocity[mask] = ground_truth_velocities[step][mask]
-        predictions.append(predicted_next_velocity)
+        predictions[step] = predicted_next_velocity
         
         # Update current position for the next prediction
         current_velocities = predicted_next_velocity
 
     # Prediction with shape (time, nnodes, dim)
-    predictions = torch.stack(predictions)
     loss = (predictions - ground_truth_velocities) ** 2
     
 
@@ -177,6 +195,75 @@ def rollout(simulator: learned_simulator.MeshSimulator,
     }
 
     return output_dict
+
+def rollout_batched(simulator: learned_simulator.MeshSimulator,
+                    features_list,
+                    nsteps: int,
+                    device):
+    """Roll out several same-length trajectories as one disjoint graph.
+
+    Per trajectory the computation is that of rollout(): the graphs share no edges, so
+    message passing never mixes trajectories. Returns one output dict per trajectory.
+    """
+    parts = []
+    for features in features_list:
+        node_coords, node_types, node_property, velocities, pressures, cells = (
+            f.to(device) for f in features[:6])
+        initial_velocities = velocities[:INPUT_SEQUENCE_LENGTH]
+        ground_truth_velocities = velocities[INPUT_SEQUENCE_LENGTH:]
+        current_velocities = initial_velocities.squeeze()
+        nnodes = current_velocities.shape[0]
+        example = ((node_coords[0], node_types[0], node_property[0], current_velocities,
+                    pressures[0], cells[0], torch.zeros(nnodes, device=device)),
+                   ground_truth_velocities[0])
+        graph = transformer(datas_to_graph(example, dt=dt, device=device))
+        parts.append(dict(nnodes=nnodes, graph=graph, initial=initial_velocities,
+                          truth=ground_truth_velocities, current=current_velocities,
+                          node_coords=node_coords, node_types=node_types,
+                          node_property=node_property))
+
+    offsets = [0]
+    for p in parts[:-1]:
+        offsets.append(offsets[-1] + p['nnodes'])
+    edge_index = torch.cat([p['graph'].edge_index + o for p, o in zip(parts, offsets)], dim=1)
+    edge_attr = torch.cat([p['graph'].edge_attr for p in parts], dim=0)
+    node_type = torch.cat([p['graph'].x[:, 0] for p in parts], dim=0)
+    node_prop = torch.cat([p['graph'].x[:, 1] for p in parts], dim=0)
+    truth = torch.cat([p['truth'] for p in parts], dim=1)
+    current_velocities = torch.cat([p['current'] for p in parts], dim=0)
+
+    kinematic_mask = torch.logical_or(node_type == NodeType.NORMAL, node_type == NodeType.HIGH_STRESS)
+    kinematic_mask = kinematic_mask.squeeze() if kinematic_mask.dim() > 1 else kinematic_mask
+    mask = ~kinematic_mask
+
+    predictions = torch.empty((nsteps,) + tuple(current_velocities.shape),
+                              dtype=current_velocities.dtype, device=device)
+    for step in tqdm(range(nsteps), total=nsteps):
+        predicted_next_velocity = simulator.predict_velocity(
+            current_velocities=current_velocities,
+            node_type=node_type,
+            node_property=node_prop,
+            edge_index=edge_index,
+            edge_features=edge_attr)
+        predicted_next_velocity[mask] = truth[step][mask]
+        predictions[step] = predicted_next_velocity
+        current_velocities = predicted_next_velocity
+
+    outputs = []
+    for p, o in zip(parts, offsets):
+        pred = predictions[:, o:o + p['nnodes']]
+        loss = (pred - p['truth']) ** 2
+        outputs.append({
+            'initial_velocities': p['initial'].cpu().numpy(),
+            'predicted_rollout': pred.cpu().numpy(),
+            'ground_truth_rollout': p['truth'].cpu().numpy(),
+            'node_coords': p['node_coords'].cpu().numpy(),
+            'node_types': p['node_types'].cpu().numpy(),
+            'node_property': p['node_property'].cpu().numpy(),
+            'mean_loss': loss.mean().cpu().numpy(),
+            'mean_acc_loss': None
+        })
+    return outputs
 
 def acceleration_loss(pred_acc, target_acc, non_kinematic_mask):
     errors = ((pred_acc - target_acc)**2)[non_kinematic_mask]  # only compute errors if node_types is NORMAL or OUTFLOW
