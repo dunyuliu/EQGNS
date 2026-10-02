@@ -178,3 +178,55 @@ def test_rollout_produces_finite_predictions_of_expected_shape(tiny_simulator, d
     assert bool((output["predicted_rollout"] == output["predicted_rollout"]).all())  # no NaN
     assert (abs(output["predicted_rollout"]) < 1e6).all()  # no blow-up
     assert output["mean_loss"] >= 0.0
+
+
+def _warm_normalizers(simulator, dataset_dir, nbatches=8):
+    """Accumulate real normalizer statistics (no optimizer step). An untouched output normalizer
+    makes an untrained model predict ~zero acceleration, which would make rollout comparisons vacuous."""
+    simulator.train()
+    ds = data_loader.get_data_loader_by_samples(
+        path=str(dataset_dir / "train.npz"), input_length_sequence=1, dt=0.1, batch_size=4, shuffle=False)
+    with torch.no_grad():
+        for i, graph in enumerate(ds):
+            if i >= nbatches:
+                break
+            graph = transformer(graph)
+            simulator.predict_acceleration(
+                current_velocities=graph.x[:, 2:4], node_type=graph.x[:, 0], node_property=graph.x[:, 1],
+                edge_index=graph.edge_index, edge_features=graph.edge_attr, target_velocities=graph.y,
+                velocity_noise=get_velocity_noise(graph, noise_std=0.0, device="cpu"))
+    simulator.eval()
+
+
+def test_batched_rollout_matches_per_trajectory_rollout(tiny_simulator, dataset_dir):
+    """rollout_batched() runs several trajectories as one disjoint graph; per trajectory it must
+    reproduce rollout() up to floating-point reassociation, with the same output keys and shapes."""
+    torch.manual_seed(0)
+    simulator = tiny_simulator
+    _warm_normalizers(simulator, dataset_dir)
+    train_mod.INPUT_SEQUENCE_LENGTH = TINY_CONFIG["INPUT_SEQUENCE_LENGTH"]
+    train_mod.dt = TINY_CONFIG["dt"]
+    cpu = torch.device("cpu")
+
+    # distinct trajectories, so a cross-trajectory edge leak changes the answer
+    group = list(data_loader.get_data_loader_by_trajectories(path=str(dataset_dir / "train.npz")))[:3]
+    assert len(group) >= 2
+    nsteps = len(group[0][0]) - train_mod.INPUT_SEQUENCE_LENGTH
+
+    with torch.no_grad():
+        single = [train_mod.rollout(simulator, f, nsteps, device=cpu) for f in group]
+        batched = train_mod.rollout_batched(simulator, group, nsteps, device=cpu)
+
+    # the comparison must be non-vacuous: the model has to move the state
+    moved = max(abs(s["predicted_rollout"] - s["initial_velocities"]).max() for s in single)
+    assert moved > 1e-3, moved
+
+    assert len(batched) == len(single)
+    for s, b in zip(single, batched):
+        assert set(s) == set(b)
+        for key in ("predicted_rollout", "ground_truth_rollout", "initial_velocities",
+                    "node_coords", "node_types", "node_property"):
+            assert s[key].shape == b[key].shape, key
+        assert (s["ground_truth_rollout"] == b["ground_truth_rollout"]).all()
+        torch.testing.assert_close(torch.as_tensor(b["predicted_rollout"]),
+                                   torch.as_tensor(s["predicted_rollout"]), rtol=1e-5, atol=1e-6)
