@@ -158,3 +158,6 @@ venv/
 venv_cotopaxi/
 misc/
 resume_claude.sh
+
+# Local experiment workspace (EQdyna runs, scratch data); never committed
+work/
