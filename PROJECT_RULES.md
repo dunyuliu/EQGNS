@@ -156,38 +156,52 @@ The repo root carries only: the four control docs (`PROJECT_RULES.md`,
 (GitHub's citation widget only reads a root-level `CITATION.cff`; this file
 does not move), `.gitignore`, `Dockerfile`, the two requirements files (rule
 8), and the two environment specs `enviornment.yml` / `gns_env.yml` — plus
-the ten tracked top-level directories: `.circleci/`, `.github/`, `docs/`,
-`example/`, `gns/`, `meshnet/`, `scripts/`, `slurm_scripts/`, `test/`,
-`utils/`. No other root-level entry is added without updating this list in
-the same change. No tracked file, anywhere in the tree, exceeds 5MB.
+the nine tracked top-level directories: `.circleci/`, `.github/`, `docs/`,
+`example/`, `gns/`, `meshnet/`, `scripts/`, `slurm_scripts/`, `utils/`. No
+other root-level entry is added without updating this list in the same
+change. No tracked file, anywhere in the tree, exceeds 5MB.
 
 Everything else currently at root is a named, flagged exception, not an open
-invitation:
-- `AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` — GitHub
-  reads these equally from `.github/`; no reference to their root path was
-  found elsewhere, so they can move there on their own.
-- `train.sh`, `run.sh`, `resume.train.sh`, `asp.rollout.sh`, `module.sh` —
-  no doc or CI reference to these root paths was found at the time of
-  writing; they can move to `scripts/` on their own.
-- `build_venv.sh`, `build_venv_frontera.sh`, `start_venv.sh`,
-  `train_cli.py`, `run.process.gns.py`, `scenario.rollout.py`, `render.sh`,
-  `render.cpu.sh` — root-level entry points invoked by path in `README.md`
-  (and, for the three Python drivers, named in rule 5). A move to
-  `scripts/` is legitimate but only together with the matching README.md
-  (and rule 5, if the Python drivers move) edit in the same commit (rule
-  11) — never the file move alone.
-- `docs/img/meshnet.gif` is currently 10.7MB, over the 5MB cap. It is a
-  violation to fix (Git LFS or external hosting), not a precedent for a
-  second large asset.
+invitation, each tagged with how it is cleared:
+- **safe** (in-repo move, clears on its own PR): `AUTHORS.md`,
+  `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` — GitHub reads these
+  equally from `.github/`; no reference to their root path was found
+  elsewhere. `train.sh`, `run.sh`, `resume.train.sh`, `asp.rollout.sh`,
+  `module.sh` — no doc or CI reference to these root paths was found at the
+  time of writing; they move to `scripts/`.
+- **ci-coupled** (in-repo move, but touches CI in the same commit, owner
+  iris-vermeulen): `test/` shadows Python's stdlib `test` package — the
+  directory moves to `tests/`, with `.github/workflows/tests.yml`,
+  `.circleci/config.yml` (both run `pytest test/ ...`), and any
+  `python -m test.` / `from test import` reference updated in the same
+  change.
+- **doc-coupled** (in-repo move, but touches a doc in the same commit, owner
+  whoever owns that doc): `render.sh`, `render.cpu.sh` — named by root path
+  in `docs/rollout_and_analysis.md`; the move and the doc edit land
+  together.
+- **breaks outside paths** (waits for the owner, not a move this rule
+  authorizes): `build_venv.sh`, `build_venv_frontera.sh`, `start_venv.sh`,
+  `train_cli.py`, `run.process.gns.py`, `scenario.rollout.py` — external job
+  scripts invoke these by root path; moving them is a cross-repo breaking
+  change until the owner coordinates it.
+- **pending owner** (not a path move — rewrites a tracked asset):
+  `docs/img/meshnet.gif` is currently 10.7MB, over the 5MB cap; converting
+  it to Git LFS or external hosting rewrites history for that path and
+  needs the owner's sign-off, not just a PR.
 
 **Rationale**: a root with no agreed membership accretes one script at a
 time until a build artifact is indistinguishable from an entry point;
 GitHub-recognized alternate locations exist for exactly the community-health
 files above and cost nothing to use.
 
-**How to apply**: `scripts/check_root.py` enforces this list and the 5MB
-cap, and report-only lists other worktrees and already-merged branches for
-manual tidy-up (never fails the gate on those). A PR adding a root-level
-file either lands on this list or edits this rule to add it, in the same
-commit. A PR moving one of the named exceptions above routes its doc-sync
-half (README.md / rule 5) to whoever owns docs, not to this rule.
+**How to apply**: `scripts/check_root.py` enforces this list, printing each
+named exception as a report-only "pending" line (so the gate stays green
+while these are open) and failing only on a root entry or an oversized file
+that is *not* already on this list. It also report-only lists other
+worktrees and already-merged branches for manual tidy-up. A PR adding a new
+root-level file either lands on the allow-list or is added here as a tagged
+exception, in the same commit — an unlisted new entry fails the gate. A PR
+clearing a **safe** or **ci-coupled**/**doc-coupled** exception makes the
+matching edit (CI config, doc) in the same commit as the move; a
+**breaks outside paths** or **pending owner** exception waits for the owner
+regardless of how trivial the move looks from inside this repo.
