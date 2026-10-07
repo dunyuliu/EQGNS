@@ -161,3 +161,10 @@ resume_claude.sh
 
 # Local experiment workspace (EQdyna runs, scratch data); never committed
 work/
+
+# Rule 9 template: dated local run output, scratch space, and agent
+# worktrees -- git-ignored inside the root, never beside it.
+runs/
+scratch/
+.claude/worktrees/
+inbox/

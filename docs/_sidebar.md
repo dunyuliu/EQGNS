@@ -1,5 +1,9 @@
 <!-- docs/_sidebar.md -->
-* [GNS Theory](theory.md)
-* [GNS data](gns_data.md)
-* [MeshNet data](flow_data.md)
-* [Inverse problem example](example-1.md)
+* [GNS Theory](user/theory.md)
+* [GNS data](user/gns_data.md)
+* [MeshNet data](user/flow_data.md)
+* [Data preparation](user/data_preparation.md)
+* [Training](user/training.md)
+* [Rollout and analysis](user/rollout_and_analysis.md)
+* [Batched rollout](user/ROLLOUT_BATCHING.md)
+* [Inverse problem example](user/example-1.md)

@@ -3,7 +3,7 @@
 # old-D1 control arm, matched-step published M1). Sentinel-based: waits for
 # each arm's three seeds to reach model-500000.pt before scoring ANY of that
 # arm's 5 checkpoint steps, so it never contends with live training for a
-# GPU. Idempotent (test/paper_parity/eval_m1_retrain.py skips work whose
+# GPU. Idempotent (tests/paper_parity/eval_m1_retrain.py skips work whose
 # JSON already exists), safe to re-launch if killed.
 #
 # Usage: setsid nohup bash scripts/run_m1_retrain_eval_queue.sh \
@@ -50,7 +50,7 @@ run_arm() {  # $1=arm ("fixed"|"old") $2=gpu
                 continue
             fi
             log "run $label step$step on GPU$gpu"
-            python3 test/paper_parity/eval_m1_retrain.py "$label" --steps "$step" --cuda "$gpu" \
+            python3 tests/paper_parity/eval_m1_retrain.py "$label" --steps "$step" --cuda "$gpu" \
                 >> "$M1_RETRAIN/eval_queue.log" 2>&1
             if [ $? -ne 0 ]; then
                 log "FAILED $label step$step (see log above) -- continuing with remaining work"
@@ -74,7 +74,7 @@ run_published() {
             gpu=$(pick_free_gpu)
         done
         log "run published step$step on GPU$gpu"
-        python3 test/paper_parity/eval_m1_retrain.py published --steps "$step" --cuda "$gpu" \
+        python3 tests/paper_parity/eval_m1_retrain.py published --steps "$step" --cuda "$gpu" \
             >> "$M1_RETRAIN/eval_queue.log" 2>&1
         if [ $? -ne 0 ]; then
             log "FAILED published step$step (see log above) -- continuing with remaining work"
