@@ -46,7 +46,7 @@ flags.DEFINE_integer('rollout_batch_size', 1, help=(
     'Number of same-length test trajectories rolled out together as one disjoint graph. '
     'Default 1: the original one-trajectory-at-a-time path, bit-identical to before. '
     '>1: same math per trajectory, but rounding differs and long rollouts can diverge during '
-    'active rupture; use for evaluation, not for the paper-parity gate (docs/ROLLOUT_BATCHING.md).'))
+    'active rupture; use for evaluation, not for the paper-parity gate (docs/user/ROLLOUT_BATCHING.md).'))
 flags.DEFINE_boolean('deterministic', False, help=(
     'Only meaningful with --seed set. Additionally asks torch for deterministic kernels '
     '(warn-only); see meshnet/seeding.py:set_deterministic.'))

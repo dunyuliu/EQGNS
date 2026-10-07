@@ -511,7 +511,7 @@ def main(_):
     global node_type_embedding_size
     global dt
     
-    # Set up paths based on working_dir structure (similar to run.process.gns.py)
+    # Set up paths based on working_dir structure (similar to scripts/run.process.gns.py)
     if FLAGS.working_dir and FLAGS.model_suffix:
         # Use working_dir structure
         if not FLAGS.model_path:

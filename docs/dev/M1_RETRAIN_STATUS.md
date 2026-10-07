@@ -43,7 +43,7 @@ once available (in progress as of this commit).
   effect).
 - Also score the published M1 checkpoint (`models.nmp10.cotopaxi/model-3000000.pt`)
   if a 500k-step published snapshot doesn't exist (it doesn't -- published
-  went to 3,000,000 steps per `test/paper_parity/gate.py`'s `M1 =
+  went to 3,000,000 steps per `tests/paper_parity/gate.py`'s `M1 =
   ("models.nmp10.cotopaxi", 3000000)`); use the nearest available published
   checkpoint if one exists at an intermediate step, else report the 3M one
   for context only (not a matched-step comparison).
@@ -123,7 +123,7 @@ run's `model-500000.pt` as a SENTINEL (not a loss_log poll):
   published, isolating the training-data effect).
 
 Dispatched building + arming this queue to a subagent (new
-`test/paper_parity/eval_m1_retrain.py` reusing gate.py's `metrics()`/
+`tests/paper_parity/eval_m1_retrain.py` reusing gate.py's `metrics()`/
 `valid_steps()`/collapse guard, + a new sentinel-polling launcher script),
 launched detached so it survives independent of any session. Will verify
 independently once armed, and again once it actually produces the 35
@@ -145,5 +145,5 @@ produces real results (fixed arm finishes -> GPU2 eval begins) or when
 ## COMPLETE (2026-09-30)
 All 6 training runs finished (500,000 steps each); eval queue finished,
 `ALL_DONE` sentinel written, all 35 result files present. Results table +
-interpretation: `docs/M1_RETRAIN_RESULTS.md`. Board row `m1-retrain-fixed-data`
+interpretation: `docs/dev/M1_RETRAIN_RESULTS.md`. Board row `m1-retrain-fixed-data`
 closes with that PR.

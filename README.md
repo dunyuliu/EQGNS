@@ -12,10 +12,10 @@ This repository is a fork of [geoelements/gns](https://github.com/geoelements/gn
 
 Modifications are mainly made to MeshNet and they include:
  1. A parameter configuration system (`config.json` under the model path; see `meshnet/example.config.json`).
- 2. A preprocessing pipeline to convert earthquake dynamic rupture states computed by [EQdyna](https://github.com/EQDYNA/EQdyna.git) to trajectories recognizable to the GNS (`utils/prepare.eqdyna.4gns.py`, `utils/prepare.fractal.stress.eqdyna.4gns.py`).
+ 2. A preprocessing pipeline to convert earthquake dynamic rupture states computed by [EQdyna](https://github.com/EQDYNA/EQdyna.git) to trajectories recognizable to the GNS (`scripts/utils/prepare.eqdyna.4gns.py`, `scripts/utils/prepare.fractal.stress.eqdyna.4gns.py`).
  3. A `node_property` channel carrying scalar initial-stress conditions per node, and an extra node type for high-stress asperities.
- 4. Postprocessing rendering and analysis of earthquake rupture dynamics (`meshnet/render.py`, `utils/plot.rupture.dynamics.py`).
- 5. Batch and scenario-sweep rollout drivers with cached graph construction for faster inference (`meshnet/batch_rollout.py`, `scenario.rollout.py`).
+ 4. Postprocessing rendering and analysis of earthquake rupture dynamics (`meshnet/render.py`, `scripts/utils/plot.rupture.dynamics.py`).
+ 5. Batch and scenario-sweep rollout drivers with cached graph construction for faster inference (`meshnet/batch_rollout.py`, `scripts/scenario.rollout.py`).
 
 Earthquake examples:
 
@@ -43,17 +43,17 @@ The MeshNet architecture follows MeshGraphNets ([Pfaff et al., 2021](https://arx
 The earthquake-specific pipeline, end to end:
 
 1. **Generate training data** with [EQdyna](https://github.com/EQDYNA/EQdyna.git) dynamic rupture simulations.
-2. **Convert to GNS trajectories**: `utils/prepare.eqdyna.4gns.py` (or `utils/prepare.fractal.stress.eqdyna.4gns.py` for fractal prestress) turns EQdyna outputs into `train.npz` / `valid.npz` / `test.npz` plus `metadata.json`. See [docs/data_preparation.md](docs/data_preparation.md).
+2. **Convert to GNS trajectories**: `scripts/utils/prepare.eqdyna.4gns.py` (or `scripts/utils/prepare.fractal.stress.eqdyna.4gns.py` for fractal prestress) turns EQdyna outputs into `train.npz` / `valid.npz` / `test.npz` plus `metadata.json`. See [docs/user/data_preparation.md](docs/user/data_preparation.md).
 3. **Configure the model**: place a `config.json` (copy `meshnet/example.config.json`) under the model path.
-4. **Train**: directly via `python3 -m meshnet.train ...`, via the single-run wrapper `train_cli.py`, or via the hyperparameter-sweep driver `run.process.gns.py`. See [docs/training.md](docs/training.md).
-5. **Rollout**: single rollouts via `meshnet.train --mode=rollout`, sweeps over models/checkpoints via `scenario.rollout.py`, batched inference via `meshnet/batch_rollout.py`. See [docs/rollout_and_analysis.md](docs/rollout_and_analysis.md).
-6. **Render and analyze**: `meshnet/render.py` (gif animations), `utils/plot.rupture.dynamics.py` (rupture-time contours, slip rate, benchmarking against EQdyna ground truth), `utils/plot.loss.curve.py`.
+4. **Train**: directly via `python3 -m meshnet.train ...`, via the single-run wrapper `scripts/train_cli.py`, or via the hyperparameter-sweep driver `scripts/run.process.gns.py`. See [docs/user/training.md](docs/user/training.md).
+5. **Rollout**: single rollouts via `meshnet.train --mode=rollout`, sweeps over models/checkpoints via `scripts/scenario.rollout.py`, batched inference via `meshnet/batch_rollout.py`. See [docs/user/rollout_and_analysis.md](docs/user/rollout_and_analysis.md).
+6. **Render and analyze**: `meshnet/render.py` (gif animations), `scripts/utils/plot.rupture.dynamics.py` (rupture-time contours, slip rate, benchmarking against EQdyna ground truth), `scripts/utils/plot.loss.curve.py`.
 
 ## Reproducing the paper
 
 - The exact code and dataset archived at publication are on Zenodo: https://doi.org/10.5281/zenodo.17095311
 - `meshnet/train.py.published` is a snapshot of `meshnet/train.py` as used for the paper; the current `meshnet/train.py` adds inference-speed optimizations that are mathematically equivalent (see `CLAUDE.md` for details).
-- Environments: `requirements.txt` (`numpy>=2.2.3`, local servers) vs. `requirements.dl.txt` (exact-pinned `numpy==2.2.3`); the numpy pin is the only intended difference, every other entry is pinned identically in both files to the validated stack below. `gns_env.yml` records a conda environment; `build_venv.sh` / `build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.
+- Environments: `requirements.txt` (`numpy>=2.2.3`, local servers) vs. `requirements.dl.txt` (exact-pinned `numpy==2.2.3`); the numpy pin is the only intended difference, every other entry is pinned identically in both files to the validated stack below. `gns_env.yml` records a conda environment; `scripts/build_venv.sh` / `scripts/build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.
 
 ## Introduction
 Graph Network-based Simulator (GNS) is a generalizable, efficient, and accurate machine learning (ML)-based surrogate simulator for particle- and mesh-based physical systems using Graph Neural Networks (GNNs). GNS has shown remarkable generability to simulated fluid, solid, deformables, particle systems with significant speedup comparing to traditional physics-based counterparts. GNS exploits distributed data parallelism to achieve fast multi-GPU training.
@@ -292,7 +292,7 @@ The dataset is shared on [DesignSafe DataDepot](https://doi.org/10.17603/ds2-fzg
 
 ## Installation
 
-GNS uses [pytorch geometric](https://www.pyg.org/) and [CUDA](https://developer.nvidia.com/cuda-downloads). These packages have specific requirements, please see [PyG installation]((https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) for details. 
+GNS uses [pytorch geometric](https://www.pyg.org/) and [CUDA](https://developer.nvidia.com/cuda-downloads). These packages have specific requirements, please see [PyG installation](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) for details. 
 
 > CPU-only installation on Linux
 
@@ -308,7 +308,7 @@ You can use the [WaterDropletSample](https://github.com/geoelements/gns-sample) 
 To test the code you can run:
 
 ```
-pytest test/
+pytest tests/
 ```
 
 To test on the small waterdroplet sample:
@@ -334,15 +334,15 @@ python -m gns.train --data_path=${DATA_PATH} --model_path=${MODEL_PATH} --ntrain
 - to setup a virtualenv
 
 ```shell
-sh ./build_venv.sh            # local servers
-sh ./build_venv_frontera.sh   # TACC Frontera
+sh ./scripts/build_venv.sh            # local servers
+sh ./scripts/build_venv_frontera.sh   # TACC Frontera
 ```
 
 - check tests run sucessfully.
 - start your environment
 
 ```shell
-source start_venv.sh 
+source scripts/start_venv.sh
 ```
 
 ### Building GNS on MacOS

@@ -23,4 +23,4 @@
 - **Pointwise slip-rate MSE is fragile.** Rupture time and arrest outcome are robust; prefer them for model comparison.
 - **Open test:** does perturbation spread flag model error without ground truth? See the next section.
 
-The figures use the existing helpers in `utils/plot.rupture.dynamics.py` (`load_rollout_data`, `get_rupture_time`, `extract_timeseries`, and the stations from `process_member`).
+The figures use the existing helpers in `scripts/utils/plot.rupture.dynamics.py` (`load_rollout_data`, `get_rupture_time`, `extract_timeseries`, and the stations from `process_member`).

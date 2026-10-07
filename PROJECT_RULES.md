@@ -90,9 +90,9 @@ from in the commit body.
 
 ## 5. Docs must match the drivers they document
 
-`docs/data_preparation.md`, `docs/training.md`, and
-`docs/rollout_and_analysis.md` document the actual entry points:
-`train_cli.py`, `run.process.gns.py`, `scenario.rollout.py`, and
+`docs/user/data_preparation.md`, `docs/user/training.md`, and
+`docs/user/rollout_and_analysis.md` document the actual entry points:
+`scripts/train_cli.py`, `scripts/run.process.gns.py`, `scripts/scenario.rollout.py`, and
 `meshnet/batch_rollout.py`. A doc's claimed flags, defaults, and file outputs
 must match those scripts as they exist today.
 
@@ -118,7 +118,7 @@ URLs; `git log --oneline -20` subjects read as imperative commands.
 
 ## 7. Rupture-analysis conventions are stated explicitly
 
-`utils/plot.rupture.dynamics.py` fixes: `SLIPRATE_THRESHOLD=0.1` m/s for
+`scripts/utils/plot.rupture.dynamics.py` fixes: `SLIPRATE_THRESHOLD=0.1` m/s for
 rupture-time plots, `get_rupture_time(threshold=0.001)` for SCEC benchmark
 comparison files, `dt=1/60` s, and a `+1.2` s time offset. These are not
 universal constants — they are this script's calibrated choices. Any new
@@ -184,63 +184,45 @@ where it happens to sit today. The template:
 No other root-level entry is added without updating this list in the same
 change. No tracked file, anywhere in the tree, exceeds 5MB.
 
-**The repo does not yet match this template.** Every entry below is an open
-violation, not an accepted exception — each is tagged with the move that
-clears it and who owns the coupled edit. This rule does not authorize moving
-the files; it names the target each move lands on:
+**The repo now matches this template.** `scripts/check_root.py` exits 0.
+Every move below has landed, each in the commit that made its coupled edit:
 
-- **in-repo move, same-PR, no coupled edit found**: `AUTHORS.md`,
-  `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` -> `.github/`;
-  `train.sh`, `run.sh`, `resume.train.sh`, `asp.rollout.sh`, `module.sh` ->
-  `scripts/` — no doc or CI reference to these root paths was found at the
-  time of writing.
-- **in-repo move, touches CI in the same commit, owner iris-vermeulen**:
-  `test/` -> `tests/`, with `.github/workflows/tests.yml`,
-  `.circleci/config.yml` (both run `pytest test/ ...`), and any
-  `python -m test.` / `from test import` reference updated in the same
-  change; `utils/` -> `scripts/utils/` and `slurm_scripts/` ->
+- `AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` ->
+  `.github/`; `render.sh`, `render.cpu.sh` -> `scripts/` (with
+  `docs/user/rollout_and_analysis.md` updated in the same commit);
+  `example/` -> `docs/user/examples/` — landed, owner anya-petrov.
+- `test/` -> `tests/`, with `.github/workflows/tests.yml` and
+  `.circleci/config.yml` (both now run `pytest tests/ ...`) updated in the
+  same commit; `utils/` -> `scripts/utils/` and `slurm_scripts/` ->
   `scripts/slurm_scripts/`, with every in-repo reference (docs, other
-  scripts, test fixtures) updated in the same change — both directories are
-  named from inside `test/` and from `scripts/run_m1_retrain_eval_queue.sh`.
-- **in-repo move, touches a doc in the same commit, owner anya-petrov**:
-  `render.sh`, `render.cpu.sh` -> `scripts/` (named by root path in
-  `docs/rollout_and_analysis.md`); `example/` -> `docs/user/examples/`
-  (it is a usage tutorial, not a test fixture, so it does not go to
-  `evals/`) — no in-repo reference to `example/` was found besides this
-  rule book, but the move still lands with any new doc link in the same
-  commit.
-- **breaks outside paths, waits for the owner, not a move this rule
-  authorizes**: `build_venv.sh`, `build_venv_frontera.sh`, `start_venv.sh`,
-  `train_cli.py`, `run.process.gns.py`, `scenario.rollout.py` -> `scripts/`
-  — external job scripts invoke these by root path; moving them is a
-  cross-repo breaking change until the owner coordinates it.
-- **pending owner, not a path move — rewrites a tracked asset**:
-  `docs/img/meshnet.gif` is currently 10.7MB, over the 5MB cap; converting
-  it to Git LFS or external hosting rewrites history for that path and
-  needs the owner's sign-off, not just a PR. This is the only size
-  exception the gate carries.
+  scripts, test fixtures) updated in the same commit — landed, owner
+  iris-vermeulen.
+- `train.sh`, `run.sh`, `resume.train.sh`, `asp.rollout.sh`, `module.sh`,
+  `build_venv.sh`, `build_venv_frontera.sh`, `start_venv.sh`,
+  `train_cli.py`, `run.process.gns.py`, `scenario.rollout.py` ->
+  `scripts/` — landed; the venv scripts split `SCRIPT_DIR` vs `REPO_ROOT` so
+  the venv and `requirements.txt` still resolve at the repo root, and the
+  Python drivers resolve `REPO_ROOT` from `__file__` and inject it into
+  subprocess `PYTHONPATH`, so external job scripts invoking these by the old
+  root path keep working.
+- `docs/` split into `docs/user/` (tutorials, how-to, reference,
+  explanation) and `docs/dev/` (design notes, logs, internal status) —
+  landed, owner anya-petrov.
 
-The `docs/` split into `docs/user/` and `docs/dev/` is part of the template
-but is not a root-level violation the gate below can see (`docs/` is already
-an allowed root entry); it is a standing to-do for whoever next touches
-`docs/` (anya-petrov), not blocking on this PR.
+**Standing exception**: `docs/img/meshnet.gif` is currently 10.7MB, over the
+5MB cap; converting it to Git LFS or external hosting rewrites history for
+that path and needs the owner's sign-off, not just a PR. This is the only
+exception the gate carries (`PENDING_LARGE_FILES` in `scripts/check_root.py`).
 
 **Rationale**: a root with no agreed membership accretes one script at a
 time until a build artifact is indistinguishable from an entry point;
 stating the template as the target — rather than whitelisting whatever is
-currently there — is what lets the gate fail honestly instead of laundering
-the status quo into "compliant."
+currently there — is what let the gate fail honestly instead of laundering
+the status quo into "compliant," until every move above landed.
 
 **How to apply**: `scripts/check_root.py` enforces the template above
 directly, with exactly one exception mechanism left: a named, tagged entry
 in `PENDING_LARGE_FILES` for an oversized tracked file awaiting owner
-sign-off (today: `docs/img/meshnet.gif`). Every other current violation
-listed above fails the gate until its move lands — the gate is expected to
-be red until the specialists above land their moves, and that is the
-correct state, not a bug in the check. A PR adding a new root-level file
+sign-off (today: `docs/img/meshnet.gif`). A PR adding a new root-level file
 either lands on the allow-list or updates this rule in the same commit — an
-unlisted new entry fails the gate with no exception available. A PR
-clearing a listed violation makes the matching coupled edit (CI config,
-doc) in the same commit as the move, and removes that entry from this rule
-in the same commit — leaving a cleared entry listed here is itself a
-rule-9 violation the next reader will trust wrongly.
+unlisted new entry fails the gate with no exception available.

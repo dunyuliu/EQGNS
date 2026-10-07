@@ -112,7 +112,7 @@ change to `meshnet/`:
   `CLAUDE.md`). Out of scope per the CPU-only constraint on this session;
   `test_pytorch_cuda_gpu.py` already exists upstream for CUDA smoke-testing
   and is a reasonable place to extend if a GPU CI runner is ever added.
-- **`meshnet/batch_rollout.py` and `scenario.rollout.py`.** Real
+- **`meshnet/batch_rollout.py` and `scripts/scenario.rollout.py`.** Real
   production entry points with no test coverage at any tier. Flagged for
   a follow-up session; not attempted here to keep this session's scope to
   the `train.py`/`rollout()` path named in the brief.

@@ -1,5 +1,6 @@
 import time
 import os
+import sys
 import numpy as np
 import toml
 import json
@@ -7,11 +8,20 @@ import glob
 import argparse
 import torch.utils.checkpoint
 
-from example.inverse_problem.forward import rollout_with_checkpointing
-from example.inverse_problem.utils import make_animation
-from example.inverse_problem.utils import visualize_final_deposits
-from example.inverse_problem.utils import visualize_velocity_profile
-from example.inverse_problem.utils import To_Torch_Model_Param
+# This example lives at docs/user/examples/inverse_problem/ (PROJECT_RULES.md
+# rule 9); gns/ stays at the repo root. Resolve both from __file__ so this
+# runs as a plain script (`python3 inverse.py`) regardless of invocation cwd,
+# instead of relying on `example` being a top-level package.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))))
+sys.path.insert(0, SCRIPT_DIR)
+sys.path.insert(0, REPO_ROOT)
+
+from forward import rollout_with_checkpointing
+from utils import make_animation
+from utils import visualize_final_deposits
+from utils import visualize_velocity_profile
+from utils import To_Torch_Model_Param
 
 from gns import reading_utils
 from gns import data_loader

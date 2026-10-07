@@ -2,13 +2,13 @@
 
 EQGNS trains on 2D dynamic rupture simulations produced by
 [EQdyna](https://github.com/EQDYNA/EQdyna.git). The conversion scripts live in
-`utils/`:
+`scripts/utils/`:
 
 | Script | Purpose |
 |---|---|
-| `utils/prepare.eqdyna.4gns.py` | Main converter: reads EQdyna on-fault outputs (netCDF), assembles trajectories, writes `train.npz` / `valid.npz` / `test.npz` and `metadata.json`. Also plots rupture dynamics and can generate `SCECRuptureTime.txt` for benchmarking. |
-| `utils/prepare.fractal.stress.eqdyna.4gns.py` | Variant for fractal initial-stress scenarios. |
-| `utils/prepare.case3.200m.others.py` | Helper for the case3 200 m generalization set. |
+| `scripts/utils/prepare.eqdyna.4gns.py` | Main converter: reads EQdyna on-fault outputs (netCDF), assembles trajectories, writes `train.npz` / `valid.npz` / `test.npz` and `metadata.json`. Also plots rupture dynamics and can generate `SCECRuptureTime.txt` for benchmarking. |
+| `scripts/utils/prepare.fractal.stress.eqdyna.4gns.py` | Variant for fractal initial-stress scenarios. |
+| `scripts/utils/prepare.case3.200m.others.py` | Helper for the case3 200 m generalization set. |
 
 Both prepare scripts select the case via a `case` variable near the top
 (e.g. `'4.200m.multi.stress'`) — edit it before running.
@@ -36,7 +36,7 @@ The training/rollout drivers assume a *working directory* per case:
 
 ```
 <working_dir>/               e.g. gns-sample/case4.200m.multi.stress.homo.a.Vw/
-├── config.json              model/system configuration (see docs/training.md)
+├── config.json              model/system configuration (see docs/user/training.md)
 ├── dataset/                 train.npz, valid.npz, test.npz, metadata.json
 ├── models.<suffix>/         checkpoints, one directory per training run
 └── rollouts.<suffix>/       rollout .pkl outputs

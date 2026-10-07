@@ -16,17 +16,17 @@ version (`meshnet/train.py.published`); results are mathematically identical.
 See `CLAUDE.md` for the full list of optimizations and options
 (`compute_loss`, `disable_tqdm`, `use_compile`, `use_amp`).
 
-## Sweeps over models and checkpoints: `scenario.rollout.py`
+## Sweeps over models and checkpoints: `scripts/scenario.rollout.py`
 
-`scenario.rollout.py` drives rollouts across many trained models. Edit the
+`scripts/scenario.rollout.py` drives rollouts across many trained models. Edit the
 `case` selector and the `model_suffixes` dict (working_dir → list of model
 suffixes), set `model_id` (checkpoint step) and `gpu_id`, then:
 
 ```shell
-python3 scenario.rollout.py
+python3 scripts/scenario.rollout.py
 ```
 
-By default it shells out to `run.process.gns.py --mode rollout` per model.
+By default it shells out to `scripts/run.process.gns.py --mode rollout` per model.
 Set `use_batch_rollout = True` to route through the batched engine instead.
 
 ## Batched inference: `meshnet/batch_rollout.py`
@@ -47,12 +47,12 @@ to re-process existing rollout pickles, `--output_path` (defaults to
 ## Rendering and analysis
 
 - `python3 -m meshnet.render --rollout_dir=<dir> --rollout_name=<name>` —
-  gif animation of predicted vs. ground-truth fields (`render.cpu.sh`,
-  `render.sh` wrap this).
-- `utils/plot.rupture.dynamics.py` — rupture-time contours, slip-rate
+  gif animation of predicted vs. ground-truth fields (`scripts/render.cpu.sh`,
+  `scripts/render.sh` wrap this).
+- `scripts/utils/plot.rupture.dynamics.py` — rupture-time contours, slip-rate
   time series, comparison against EQdyna ground truth, SCEC-style benchmark
   outputs.
-- `utils/case3.200m.visualize.hypocenters.py`,
-  `utils/case4.200m.multi.stress.visualize.datasets.py` — dataset/scenario
+- `scripts/utils/case3.200m.visualize.hypocenters.py`,
+  `scripts/utils/case4.200m.multi.stress.visualize.datasets.py` — dataset/scenario
   visualization.
-- `utils/convert.mp4.to.gif.py` — convert rendered movies for the README.
+- `scripts/utils/convert.mp4.to.gif.py` — convert rendered movies for the README.

@@ -1,7 +1,7 @@
 # M1 retrain: fixed-D1 vs old-D1 (bug-fix data effect), seed spread
 
 Owner-approved comparison: does fixing the `nskip` double-subtraction bug in
-`utils/prepare.eqdyna.4gns.py` (PR #5) — which left the last 72 of 827 frames
+`scripts/utils/prepare.eqdyna.4gns.py` (PR #5) — which left the last 72 of 827 frames
 all-zero in the published D1 dataset — change M1 training outcomes.
 
 ## Setup
