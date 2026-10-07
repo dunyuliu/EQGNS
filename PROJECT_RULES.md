@@ -15,7 +15,7 @@ maintenance + new-experiment mode.
 6. Remotes and commit style
 7. Rupture-analysis conventions are stated explicitly
 8. `requirements.txt` vs `requirements.dl.txt` differ only in the numpy pin
-9. A curated root — whitelist, not a preference
+9. A curated root — the template is the target, not the status quo
 
 ---
 
@@ -149,59 +149,98 @@ from.
 the diff must be the numpy pin (or trailing-newline noise); any other diff
 line is a Tier-1 violation and gets documented here or reverted.
 
-## 9. A curated root — whitelist, not a preference
+## 9. A curated root — the template is the target, not the status quo
 
-The repo root carries only: the four control docs (`PROJECT_RULES.md`,
-`PATHWAY_FORWARD.md`, `README.md`, `CLAUDE.md`), `license.md`, `CITATION.cff`
-(GitHub's citation widget only reads a root-level `CITATION.cff`; this file
-does not move), `.gitignore`, `Dockerfile`, the two requirements files (rule
-8), and the two environment specs `enviornment.yml` / `gns_env.yml` — plus
-the nine tracked top-level directories: `.circleci/`, `.github/`, `docs/`,
-`example/`, `gns/`, `meshnet/`, `scripts/`, `slurm_scripts/`, `utils/`. No
-other root-level entry is added without updating this list in the same
+This rule states where every root-level entry **belongs**, independent of
+where it happens to sit today. The template:
+
+- the four control docs (`PROJECT_RULES.md`, `PATHWAY_FORWARD.md`,
+  `README.md`, `CLAUDE.md`)
+- `license.md`, `CITATION.cff` (GitHub's citation widget only reads a
+  root-level `CITATION.cff`; this file does not move), `.gitignore`,
+  `Dockerfile`, the two requirements files (rule 8), and the two environment
+  specs `enviornment.yml` / `gns_env.yml`
+- `.circleci/`, `.github/` — community-health files (`AUTHORS.md`,
+  `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md`) live under `.github/`;
+  GitHub reads them there equally
+- `docs/`, split `docs/user/` (tutorials, how-to, reference, explanation —
+  the published site builds from here) and `docs/dev/` (design notes, logs,
+  archived release notes)
+- `evals/` — fixtures and golden/reference data for the test gate. A slot
+  that fills as earned (rule 1): absent until something is moved or added
+  to it is not itself a violation
+- `data/` — small reference data only; large data links to the shared
+  dataset store, never committed. Same "fills as earned" status as `evals/`
+- `gns/`, `meshnet/` — the two packages. They stay at root: an external
+  project symlinks them, so root is their stable address
+- `scripts/` — every root-level `.sh`/`.py` entry point (`train.sh`, `run.sh`,
+  `resume.train.sh`, `asp.rollout.sh`, `module.sh`, `render.sh`,
+  `render.cpu.sh`, `build_venv.sh`, `build_venv_frontera.sh`,
+  `start_venv.sh`, `train_cli.py`, `run.process.gns.py`,
+  `scenario.rollout.py`), plus `utils/` and `slurm_scripts/` as
+  subdirectories (`scripts/utils/`, `scripts/slurm_scripts/`)
+- `tests/` — never `test/`: the name shadows Python's stdlib `test` package
+
+No other root-level entry is added without updating this list in the same
 change. No tracked file, anywhere in the tree, exceeds 5MB.
 
-Everything else currently at root is a named, flagged exception, not an open
-invitation, each tagged with how it is cleared:
-- **safe** (in-repo move, clears on its own PR): `AUTHORS.md`,
-  `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` — GitHub reads these
-  equally from `.github/`; no reference to their root path was found
-  elsewhere. `train.sh`, `run.sh`, `resume.train.sh`, `asp.rollout.sh`,
-  `module.sh` — no doc or CI reference to these root paths was found at the
-  time of writing; they move to `scripts/`.
-- **ci-coupled** (in-repo move, but touches CI in the same commit, owner
-  iris-vermeulen): `test/` shadows Python's stdlib `test` package — the
-  directory moves to `tests/`, with `.github/workflows/tests.yml`,
+**The repo does not yet match this template.** Every entry below is an open
+violation, not an accepted exception — each is tagged with the move that
+clears it and who owns the coupled edit. This rule does not authorize moving
+the files; it names the target each move lands on:
+
+- **in-repo move, same-PR, no coupled edit found**: `AUTHORS.md`,
+  `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` -> `.github/`;
+  `train.sh`, `run.sh`, `resume.train.sh`, `asp.rollout.sh`, `module.sh` ->
+  `scripts/` — no doc or CI reference to these root paths was found at the
+  time of writing.
+- **in-repo move, touches CI in the same commit, owner iris-vermeulen**:
+  `test/` -> `tests/`, with `.github/workflows/tests.yml`,
   `.circleci/config.yml` (both run `pytest test/ ...`), and any
   `python -m test.` / `from test import` reference updated in the same
-  change.
-- **doc-coupled** (in-repo move, but touches a doc in the same commit, owner
-  whoever owns that doc): `render.sh`, `render.cpu.sh` — named by root path
-  in `docs/rollout_and_analysis.md`; the move and the doc edit land
-  together.
-- **breaks outside paths** (waits for the owner, not a move this rule
-  authorizes): `build_venv.sh`, `build_venv_frontera.sh`, `start_venv.sh`,
-  `train_cli.py`, `run.process.gns.py`, `scenario.rollout.py` — external job
-  scripts invoke these by root path; moving them is a cross-repo breaking
-  change until the owner coordinates it.
-- **pending owner** (not a path move — rewrites a tracked asset):
+  change; `utils/` -> `scripts/utils/` and `slurm_scripts/` ->
+  `scripts/slurm_scripts/`, with every in-repo reference (docs, other
+  scripts, test fixtures) updated in the same change — both directories are
+  named from inside `test/` and from `scripts/run_m1_retrain_eval_queue.sh`.
+- **in-repo move, touches a doc in the same commit, owner anya-petrov**:
+  `render.sh`, `render.cpu.sh` -> `scripts/` (named by root path in
+  `docs/rollout_and_analysis.md`); `example/` -> `docs/user/examples/`
+  (it is a usage tutorial, not a test fixture, so it does not go to
+  `evals/`) — no in-repo reference to `example/` was found besides this
+  rule book, but the move still lands with any new doc link in the same
+  commit.
+- **breaks outside paths, waits for the owner, not a move this rule
+  authorizes**: `build_venv.sh`, `build_venv_frontera.sh`, `start_venv.sh`,
+  `train_cli.py`, `run.process.gns.py`, `scenario.rollout.py` -> `scripts/`
+  — external job scripts invoke these by root path; moving them is a
+  cross-repo breaking change until the owner coordinates it.
+- **pending owner, not a path move — rewrites a tracked asset**:
   `docs/img/meshnet.gif` is currently 10.7MB, over the 5MB cap; converting
   it to Git LFS or external hosting rewrites history for that path and
-  needs the owner's sign-off, not just a PR.
+  needs the owner's sign-off, not just a PR. This is the only size
+  exception the gate carries.
+
+The `docs/` split into `docs/user/` and `docs/dev/` is part of the template
+but is not a root-level violation the gate below can see (`docs/` is already
+an allowed root entry); it is a standing to-do for whoever next touches
+`docs/` (anya-petrov), not blocking on this PR.
 
 **Rationale**: a root with no agreed membership accretes one script at a
 time until a build artifact is indistinguishable from an entry point;
-GitHub-recognized alternate locations exist for exactly the community-health
-files above and cost nothing to use.
+stating the template as the target — rather than whitelisting whatever is
+currently there — is what lets the gate fail honestly instead of laundering
+the status quo into "compliant."
 
-**How to apply**: `scripts/check_root.py` enforces this list, printing each
-named exception as a report-only "pending" line (so the gate stays green
-while these are open) and failing only on a root entry or an oversized file
-that is *not* already on this list. It also report-only lists other
-worktrees and already-merged branches for manual tidy-up. A PR adding a new
-root-level file either lands on the allow-list or is added here as a tagged
-exception, in the same commit — an unlisted new entry fails the gate. A PR
-clearing a **safe** or **ci-coupled**/**doc-coupled** exception makes the
-matching edit (CI config, doc) in the same commit as the move; a
-**breaks outside paths** or **pending owner** exception waits for the owner
-regardless of how trivial the move looks from inside this repo.
+**How to apply**: `scripts/check_root.py` enforces the template above
+directly, with exactly one exception mechanism left: a named, tagged entry
+in `PENDING_LARGE_FILES` for an oversized tracked file awaiting owner
+sign-off (today: `docs/img/meshnet.gif`). Every other current violation
+listed above fails the gate until its move lands — the gate is expected to
+be red until the specialists above land their moves, and that is the
+correct state, not a bug in the check. A PR adding a new root-level file
+either lands on the allow-list or updates this rule in the same commit — an
+unlisted new entry fails the gate with no exception available. A PR
+clearing a listed violation makes the matching coupled edit (CI config,
+doc) in the same commit as the move, and removes that entry from this rule
+in the same commit — leaving a cleared entry listed here is itself a
+rule-9 violation the next reader will trust wrongly.
