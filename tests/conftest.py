@@ -2,7 +2,7 @@
 
 Adds the repo root to sys.path (so `import meshnet` / `import gns` work
 regardless of how pytest is invoked) and registers the tier markers used to
-group the meshnet test pyramid (see test/README.md).
+group the meshnet test pyramid (see tests/README.md).
 """
 import os
 import sys
@@ -12,14 +12,15 @@ _REPO_ROOT = os.path.abspath(os.path.join(_TEST_DIR, '..'))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 # NOTE: do not import fixtures as `test.fixtures...` -- the CPython stdlib
-# ships its own top-level `test` package, and if anything on the import path
-# has already triggered `import test` (pulling in /usr/lib/pythonX/test),
-# `test.fixtures` silently resolves against the stdlib package instead of
-# this directory. Add test/ itself to sys.path and import as `fixtures...`.
+# ships its own top-level `test` package (this is also why this directory is
+# named `tests/`, not `test/`), and if anything on the import path has
+# already triggered `import test` (pulling in /usr/lib/pythonX/test),
+# `test.fixtures` would silently resolve against the stdlib package instead
+# of this directory. Add tests/ itself to sys.path and import as `fixtures...`.
 if _TEST_DIR not in sys.path:
     sys.path.insert(0, _TEST_DIR)
 
-# The dataprep guard tests (test_dataprep_*.py) exec utils/prepare*.4gns.py,
+# The dataprep guard tests (test_dataprep_*.py) exec scripts/utils/prepare*.4gns.py,
 # which creates a matplotlib figure per frame. Locally that resolves to
 # TkAgg; GitHub Actions CI has no display server, so force the headless Agg
 # backend for the whole test session before anything imports pyplot.
@@ -46,9 +47,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: not required for the fast local loop, but always run in CI")
     config.addinivalue_line(
-        "markers", "paper_parity: reruns published checkpoints (opt-in, see test/paper_parity/README.md)")
+        "markers", "paper_parity: reruns published checkpoints (opt-in, see tests/paper_parity/README.md)")
     config.addinivalue_line(
-        "markers", "dataprep: guards utils/prepare*.4gns.py (EQdyna output -> npz) against regressions")
+        "markers", "dataprep: guards scripts/utils/prepare*.4gns.py (EQdyna output -> npz) against regressions")
 
 
 def pytest_addoption(parser):

@@ -25,11 +25,11 @@ jobs:
             conda install -c conda-forge pytest -y
             # Fast tier first (unit/integration/physical, all CPU + synthetic
             # data): fails fast before we pay for the slower end-to-end tier.
-            pytest test/ -m "not slow" -q
+            pytest tests/ -m "not slow" -q
             # Full suite, including the meshnet e2e golden-file pipeline test
-            # (test/test_meshnet_e2e_golden.py) -- always run in CI even
-            # though it is marked `slow` for local skipping (see test/README.md).
-            pytest test/ -q
+            # (tests/test_meshnet_e2e_golden.py) -- always run in CI even
+            # though it is marked `slow` for local skipping (see tests/README.md).
+            pytest tests/ -q
             echo "Test paths: ${DATA_PATH} ${MODEL_PATH}"
             ls
             python -m gns.train --data_path=${DATA_PATH} --model_path=${MODEL_PATH} --ntraining_steps=10

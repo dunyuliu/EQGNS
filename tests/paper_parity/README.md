@@ -7,10 +7,10 @@ Checks that the current `meshnet` code reproduces the published GNS results
 
 ```bash
 source venv/bin/activate
-python3 test/paper_parity/gate.py quick            # ~1 min: every edit to meshnet/
-python3 test/paper_parity/gate.py run --cuda 0,1,2,3   # all 7 cases in parallel, before a release
-python3 test/paper_parity/gate.py run M1_D1        # one case
-pytest test/paper_parity --paper-parity -q         # same, via pytest
+python3 tests/paper_parity/gate.py quick            # ~1 min: every edit to meshnet/
+python3 tests/paper_parity/gate.py run --cuda 0,1,2,3   # all 7 cases in parallel, before a release
+python3 tests/paper_parity/gate.py run M1_D1        # one case
+pytest tests/paper_parity --paper-parity -q         # same, via pytest
 ```
 
 Needs `gns-sample/` (published checkpoints and test sets) and a GPU. Skipped in CI.
@@ -27,7 +27,7 @@ bit-identical.
   (the paper's code), deterministic (`gate.py reference`).
 - `gate.py run`: the current code must match the reference to 1e-4 relative
   on slip-rate MSE (vx) and rupture-time RMSE / missed / false counts at 0.1 m/s
-  (`utils/plot.rupture.dynamics.py` conventions).
+  (`scripts/utils/plot.rupture.dynamics.py` conventions).
 - `gate.py paper`: reference vs the published rollout files (`published.json`),
   as a sanity check that the reference itself reproduces the paper.
 - `gate.py falsify M1_D1`: scales all weights by 1.005; the gate must FAIL.

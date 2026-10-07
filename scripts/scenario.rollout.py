@@ -3,8 +3,16 @@ import itertools
 import argparse
 import sys
 
+# This script lives in scripts/ (PROJECT_RULES.md rule 9); meshnet/ and
+# run.process.gns.py stay at/alongside it. Resolve both from __file__, not
+# the cwd, so this still works whether invoked as
+# `python3 scripts/scenario.rollout.py` from the repo root or
+# `python3 scenario.rollout.py` from inside scripts/.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+
 # Add path for batch_rollout functionality
-sys.path.append('meshnet')
+sys.path.append(os.path.join(REPO_ROOT, 'meshnet'))
 
 # Define your lists of parameters
 
@@ -167,7 +175,7 @@ if not use_batch_rollout:
     # Loop over directories and their suffixes
     for working_dir, suffixes in model_suffixes.items():
         for suffix in suffixes:
-            command = (f"python /home/utig5/dliu/eq_rupture_gns/run.process.gns.py "
+            command = (f"python {os.path.join(SCRIPT_DIR, 'run.process.gns.py')} "
                   f"--working_dir {working_dir} "
                   f"--mode rollout "
                   f"--model_suffix {suffix} "

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Regenerate test/golden/meshnet_e2e_rollout_golden.npz.
+"""Regenerate tests/golden/meshnet_e2e_rollout_golden.npz.
 
 Run this ONLY when a meshnet change is confirmed correct and the golden
 needs to move; note the regeneration and why in the commit message (per
-test/README.md's e2e tier policy). Do not run this to silence a failing
+tests/README.md's e2e tier policy). Do not run this to silence a failing
 test without understanding why the numbers changed.
 """
 import os

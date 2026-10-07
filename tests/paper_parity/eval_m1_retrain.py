@@ -7,14 +7,14 @@ trajectories) so the comparison isolates the training-data effect:
   old_seed{0,1,2}    -- control, retrained on the original published dataset
   published          -- the original published M1 checkpoints, matched steps
 
-Reuses test/paper_parity/gate.py's metrics()/valid_steps() (collapse guard,
+Reuses tests/paper_parity/gate.py's metrics()/valid_steps() (collapse guard,
 var_ratio) verbatim -- do not reimplement. Mirrors gate.py's run_rollout()
 pattern: tempdir with test.npz symlinked in, det_rollout.py current --mode=rollout.
 
 Usage:
-  python3 test/paper_parity/eval_m1_retrain.py fixed_seed0 --steps 100000 --cuda 2
-  python3 test/paper_parity/eval_m1_retrain.py published --steps 100000,200000 --cuda 1
-  python3 test/paper_parity/eval_m1_retrain.py old_seed1 --cuda 1 --quick   # fast proof-of-pipeline
+  python3 tests/paper_parity/eval_m1_retrain.py fixed_seed0 --steps 100000 --cuda 2
+  python3 tests/paper_parity/eval_m1_retrain.py published --steps 100000,200000 --cuda 1
+  python3 tests/paper_parity/eval_m1_retrain.py old_seed1 --cuda 1 --quick   # fast proof-of-pipeline
 
 Output: one JSON file per (label, step) with the per-trajectory metrics list
 (same shape as gate.py's metrics() return), written to

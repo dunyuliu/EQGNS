@@ -8,11 +8,11 @@ seeded end-to-end pipeline test with a committed golden file, and a
 physical-behaviour tier for the rollout invariants the model claims to
 satisfy.
 
-`test/test_*.py` (upstream `geoelements/gns` unit tests for the
+`tests/test_*.py` (upstream `geoelements/gns` unit tests for the
 particulate-domain `gns/` package) were here before this session and are
 unchanged. Everything below is new, under `meshnet` naming, and uses only
 a tiny synthetic dataset built on the fly by
-`test/fixtures/meshnet/synth.py` -- never the (not checked out, 249GB)
+`tests/fixtures/meshnet/synth.py` -- never the (not checked out, 249GB)
 `gns-sample` data.
 
 ## Tiers
@@ -23,7 +23,7 @@ a tiny synthetic dataset built on the fly by
 | 2. Integration | `integration` | `test_meshnet_integration_train_rollout.py` | real `SamplesDataset` -> `FaceToEdge`/`Cartesian`/`Distance` transformer -> `predict_acceleration` -> backward -> `optimizer.step()`; checkpoint save -> fresh simulator -> `load()` -> identical predictions; `meshnet.train.rollout()` on a `TrajectoriesDataset` example |
 | 3. End-to-end | `e2e`, `slow` | `test_meshnet_e2e_golden.py` | the real CLI (`python3 -m meshnet.train`, via a seeded wrapper) run `--mode=train` then `--mode=rollout` on a tiny deterministic dataset, diffed against a committed golden file |
 | 4. Physical-behaviour | `physical` | `test_meshnet_physical.py` | additive-acceleration identity through a real graph, zero-forcing -> zero-response asymptotic limit (mutation-verified to actually depend on the weights, not just the untrained normalizer floor), velocity-noise std vs `noise_std` |
-| 5. Data-prep guard | `dataprep` | `test_dataprep_prepare_eqdyna.py`, `test_dataprep_prepare_fractal_stress.py` | `utils/prepare.eqdyna.4gns.py` / `utils/prepare.fractal.stress.eqdyna.4gns.py`'s shared `create_train_data()` EQdyna-output -> npz conversion, on a tiny synthetic 4-node case built by `test/fixtures/dataprep/synth_case.py`: frame count, shapes/dtypes, no all-zero frames (regression guard for the zero-tail bug fixed in PR #5 / commit 1afb989), the `nskip` raw-file-to-frame offset, fractal-stress node-property lookup, and train/valid/test split disjointness |
+| 5. Data-prep guard | `dataprep` | `test_dataprep_prepare_eqdyna.py`, `test_dataprep_prepare_fractal_stress.py` | `scripts/utils/prepare.eqdyna.4gns.py` / `scripts/utils/prepare.fractal.stress.eqdyna.4gns.py`'s shared `create_train_data()` EQdyna-output -> npz conversion, on a tiny synthetic 4-node case built by `tests/fixtures/dataprep/synth_case.py`: frame count, shapes/dtypes, no all-zero frames (regression guard for the zero-tail bug fixed in PR #5 / commit 1afb989), the `nskip` raw-file-to-frame offset, fractal-stress node-property lookup, and train/valid/test split disjointness |
 
 ## Running
 
@@ -31,29 +31,29 @@ a tiny synthetic dataset built on the fly by
 source venv/bin/activate
 
 # Everything this session added, plus the pre-existing gns/ unit tests:
-pytest test/ -q
+pytest tests/ -q
 
 # Fast local loop (skip the ~15s end-to-end golden test):
-pytest test/ -m "not slow" -q
+pytest tests/ -m "not slow" -q
 
 # Just the meshnet tiers:
-pytest test/ -k meshnet -q
+pytest tests/ -k meshnet -q
 
 # One tier:
-pytest test/ -m unit -q
-pytest test/ -m integration -q
-pytest test/ -m e2e -q
-pytest test/ -m physical -q
-pytest test/ -m dataprep -q
+pytest tests/ -m unit -q
+pytest tests/ -m integration -q
+pytest tests/ -m e2e -q
+pytest tests/ -m physical -q
+pytest tests/ -m dataprep -q
 ```
 
-CI (`.github/workflows/tests.yml`) runs `pytest test/ -m "not slow" -q`
-(fast tier) and then the full, unfiltered `pytest test/ -q` -- the `slow`
+CI (`.github/workflows/tests.yml`) runs `pytest tests/ -m "not slow" -q`
+(fast tier) and then the full, unfiltered `pytest tests/ -q` -- the `slow`
 marker is for skipping locally, not for skipping in CI (see the pattern of
 `not compute_loss=False`-style opt-outs documented in `CLAUDE.md`:
 convenient locally, never the CI default).
 
-Total measured runtime of the full `test/` suite (63 tests, single CPU
+Total measured runtime of the full `tests/` suite (63 tests, single CPU
 thread, this repo's `venv`): ~27s, of which ~13s is the two `python3 -m
 meshnet.train` subprocess launches in the e2e tier (import + torch/PyG
 startup dominates, not the tiny model itself); the 10-test `dataprep` tier
@@ -61,16 +61,16 @@ adds ~3s.
 
 ## The golden file (tier 3)
 
-`test/golden/meshnet_e2e_rollout_golden.npz` was generated once with:
+`tests/golden/meshnet_e2e_rollout_golden.npz` was generated once with:
 
 ```bash
-python3 test/fixtures/meshnet/generate_golden.py
+python3 tests/fixtures/meshnet/generate_golden.py
 ```
 
 using the fixed seed `20260101` (see
-`test/fixtures/meshnet/seeded_pipeline_cli.py`), an 8-step training run,
+`tests/fixtures/meshnet/seeded_pipeline_cli.py`), an 8-step training run,
 and the synthetic 12-node mesh / 24-timestep trajectory built by
-`test/fixtures/meshnet/synth.py` with `DATASET_SEED=555` (see
+`tests/fixtures/meshnet/synth.py` with `DATASET_SEED=555` (see
 `test_meshnet_e2e_golden.py`). The synthetic dataset itself is *not*
 committed as a binary -- it is 100% reproducible from the seed, so only
 the (much smaller) resulting rollout array is committed.

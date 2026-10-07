@@ -1,4 +1,4 @@
-"""Data-prep guard (tier: dataprep) for utils/prepare.eqdyna.4gns.py.
+"""Data-prep guard (tier: dataprep) for scripts/utils/prepare.eqdyna.4gns.py.
 
 Regression test for the shipped bug (fixed in PR #5 / commit 1afb989):
 `timestep -= nskip` followed by `for i in range(timestep - nskip):` silently
@@ -7,7 +7,7 @@ node_type/node_property (827-frame real run -> last 72 frames zero). The
 fixed code is `for i in range(timestep):` (timestep already reduced once).
 
 Uses a tiny synthetic 4-node, 13-frame EQdyna-output case built on the fly
-by test/fixtures/dataprep/synth_case.py -- never gns-sample or any real
+by tests/fixtures/dataprep/synth_case.py -- never gns-sample or any real
 scenario dataset.
 """
 import importlib
@@ -27,7 +27,7 @@ from fixtures.dataprep.synth_case import (  # noqa: E402
 pytestmark = pytest.mark.dataprep
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = REPO_ROOT / "utils" / "prepare.eqdyna.4gns.py"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "utils" / "prepare.eqdyna.4gns.py"
 
 ASP_LIST = [[-1e6, -1e6, 3, 0.25, 1.0]]  # asperity far outside the domain ->
 # every node gets the background normalized stress 0.25 (never 0.0), so an

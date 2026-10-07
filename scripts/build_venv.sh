@@ -11,14 +11,19 @@ set -euo pipefail
 # this venv's own interpreter explicitly from here on -- never a bare
 # `python`/`pip` that could silently resolve to something else on PATH
 # (this is exactly the failure mode that corrupted venv_cotopaxi).
+#
+# This script moved from repo root to scripts/ (PROJECT_RULES.md rule 9);
+# requirements.txt and the venv itself stay at the repo root, so build
+# against REPO_ROOT (the parent of this script's directory), not SCRIPT_DIR.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$REPO_ROOT"
 
 # create env
 # ---------
 python3 -m virtualenv venv
 
-VENV_PY="$SCRIPT_DIR/venv/bin/python"
+VENV_PY="$REPO_ROOT/venv/bin/python"
 if [ ! -x "$VENV_PY" ]; then
   echo "ERROR: venv creation failed -- $VENV_PY not found or not executable." >&2
   echo "Refusing to install anything against an unverified interpreter." >&2
@@ -40,7 +45,7 @@ fi
 
 "$VENV_PY" -m pip install torch_geometric==2.6.1
 
-"$VENV_PY" -m pip install -r "$SCRIPT_DIR/requirements.txt"
+"$VENV_PY" -m pip install -r "$REPO_ROOT/requirements.txt"
 
 # test env
 # --------
@@ -48,13 +53,13 @@ echo 'which python -> venv'
 "$VENV_PY" -c "import sys; print(sys.executable)"
 
 echo 'test_pytorch.py -> random tensor'
-"$VENV_PY" test/test_pytorch.py
+"$VENV_PY" tests/test_pytorch.py
 
 echo 'test_pytorch_cuda_gpu.py -> True if GPU'
-"$VENV_PY" test/test_pytorch_cuda_gpu.py
+"$VENV_PY" tests/test_pytorch_cuda_gpu.py
 
 echo 'test_torch_geometric.py -> no return if import successful'
-"$VENV_PY" test/test_torch_geometric.py
+"$VENV_PY" tests/test_torch_geometric.py
 
 # Clean up
 # --------

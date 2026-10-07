@@ -19,7 +19,7 @@ All rollouts run in torch deterministic mode (det_rollout.py), which makes
 reruns bit-identical; GPU nondeterminism otherwise swings chaotic
 trajectories by >100% in MSE. Metrics per trajectory: rollout MSE of vx, and
 rupture-time RMSE / missed / false node counts at 0.1 m/s
-(utils/plot.rupture.dynamics.py), over the unpadded steps (see valid_steps).
+(scripts/utils/plot.rupture.dynamics.py), over the unpadded steps (see valid_steps).
 """
 import argparse
 import os
@@ -57,7 +57,7 @@ REGEN_DATASET_DIR = {
     "M1_large": REGEN_DATA / "M1_large" / "dataset",
 }
 
-DT = 0.0167777          # utils/plot.rupture.dynamics.py
+DT = 0.0167777          # scripts/utils/plot.rupture.dynamics.py
 THRESHOLD = 0.1         # m/s, SLIPRATE_THRESHOLD
 UNREACHED = 1000.0
 # quick tier: the trajectory per model most sensitive to perturbation, truncated

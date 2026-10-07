@@ -3,6 +3,14 @@ import argparse
 import os
 import subprocess
 
+# This script lives in scripts/ (PROJECT_RULES.md rule 9); the meshnet/gns
+# packages it subprocesses into stay at the repo root. Resolve the repo root
+# from __file__, not the cwd, so `python -m meshnet.train` resolves whether
+# this is invoked as `python3 scripts/train_cli.py ...` from the repo root or
+# as `python3 train_cli.py ...` from inside scripts/.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def main():
     """
     This script automates the training of a model using meshnet.
@@ -12,9 +20,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="""
         Train a model using meshnet.
-        This script is a Python replacement for train.sh.
+        This script is a Python replacement for scripts/train.sh.
         Example Usage:
-        python train_cli.py case3.200m nmp10.cotopaxi 0 2
+        python3 scripts/train_cli.py case3.200m nmp10.cotopaxi 0 2
         """,
         formatter_class=argparse.RawTextHelpFormatter
     )
@@ -78,6 +86,10 @@ Available datasets include:
     env['LD_LIBRARY_PATH'] = f"{env.get('LD_LIBRARY_PATH', '')}:{cuda_path}"
     env['OMP_NUM_THREADS'] = '1'
     env['CUDA_VISIBLE_DEVICES'] = args.gpu_id
+    # So `python3 -m meshnet.train` below finds the meshnet/gns packages
+    # regardless of this process's own cwd (see REPO_ROOT above).
+    env['PYTHONPATH'] = os.pathsep.join(
+        [REPO_ROOT] + ([env['PYTHONPATH']] if env.get('PYTHONPATH') else []))
 
     cmd = [
         'python3', '-m', 'meshnet.train',

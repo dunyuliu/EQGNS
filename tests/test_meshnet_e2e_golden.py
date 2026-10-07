@@ -2,19 +2,19 @@
 `python3 -m test.testAll` -> verify.test.py.
 
 Runs the real CLI (`python3 -m meshnet.train`, via a seeded test wrapper --
-see test/fixtures/meshnet/seeded_pipeline_cli.py) through: config load ->
+see tests/fixtures/meshnet/seeded_pipeline_cli.py) through: config load ->
 train N steps -> checkpoint -> rollout, on a small, deterministic, committed
 synthetic dataset (built fresh each run by
-test/fixtures/meshnet/synth.build_dataset with a fixed seed -- not committed
+tests/fixtures/meshnet/synth.build_dataset with a fixed seed -- not committed
 as a binary, since it is 100% reproducible from the seed).
 
 The rollout's predicted velocity field is compared against a committed
-golden file (test/golden/meshnet_e2e_rollout_golden.npz) within a tolerance,
+golden file (tests/golden/meshnet_e2e_rollout_golden.npz) within a tolerance,
 the same pattern as EQdyna.2Dcycle's test_system/verify.test.py.
 
 If this test fails after an intentional change to meshnet/ (e.g. a
 numerically-equivalent refactor), regenerate the golden with:
-    python3 test/fixtures/meshnet/generate_golden.py
+    python3 tests/fixtures/meshnet/generate_golden.py
 and note in the commit message that the golden was regenerated and why.
 """
 import os
@@ -28,8 +28,8 @@ import pytest
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CLI = os.path.join(REPO_ROOT, "test", "fixtures", "meshnet", "seeded_pipeline_cli.py")
-GOLDEN_PATH = os.path.join(REPO_ROOT, "test", "golden", "meshnet_e2e_rollout_golden.npz")
+CLI = os.path.join(REPO_ROOT, "tests", "fixtures", "meshnet", "seeded_pipeline_cli.py")
+GOLDEN_PATH = os.path.join(REPO_ROOT, "tests", "golden", "meshnet_e2e_rollout_golden.npz")
 
 DATASET_SEED = 555
 TIMESTEPS = 24
@@ -39,7 +39,7 @@ TOLERANCE = 1e-3  # matches EQdyna.2Dcycle's verify.test.py compare_txt_files th
 
 
 def _run_pipeline(tmp_path):
-    sys.path.insert(0, os.path.join(REPO_ROOT, "test"))
+    sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
     from fixtures.meshnet.synth import build_dataset, write_config
 
     data_dir = tmp_path / "data"
@@ -87,7 +87,7 @@ def test_seeded_mini_pipeline_matches_golden_rollout(tmp_path):
 
     assert os.path.exists(GOLDEN_PATH), (
         "golden file missing; generate it with "
-        "test/fixtures/meshnet/generate_golden.py and commit it")
+        "tests/fixtures/meshnet/generate_golden.py and commit it")
 
     golden = np.load(GOLDEN_PATH)
 
@@ -104,6 +104,6 @@ def test_seeded_mini_pipeline_matches_golden_rollout(tmp_path):
     # not of the model: it must be bit-for-bit stable, i.e. dataset determinism itself.
     np.testing.assert_allclose(
         ground_truth, golden["ground_truth_rollout"], atol=1e-6, rtol=0,
-        err_msg="synthetic dataset generator (test/fixtures/meshnet/synth.py) "
+        err_msg="synthetic dataset generator (tests/fixtures/meshnet/synth.py) "
                 "is no longer deterministic for a fixed seed")
     assert np.isfinite(predicted).all()

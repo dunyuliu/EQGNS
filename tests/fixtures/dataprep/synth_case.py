@@ -3,9 +3,10 @@
 Builds a tiny on-disk case directory that looks enough like a real EQdyna
 output + case folder (frt.txt<chunk>, src_evol<chunk>, user_defined_params.py,
 optionally fractal_stress.txt) for the shared `create_train_data()` logic in
-utils/prepare.eqdyna.4gns.py and utils/prepare.fractal.stress.eqdyna.4gns.py
-to run on, deterministically and in milliseconds. Never touches the (not
-checked out, 249GB) real scenario datasets.
+scripts/utils/prepare.eqdyna.4gns.py and
+scripts/utils/prepare.fractal.stress.eqdyna.4gns.py to run on,
+deterministically and in milliseconds. Never touches the (not checked out,
+249GB) real scenario datasets.
 
 Geometry: 4 fault nodes, 2 strike x 2 dip positions, dx=dy=dz=1000 m.
 
@@ -129,7 +130,7 @@ _STRIP_IMPORT_RE = re.compile(
 
 
 def load_prepare_module(script_path: Path, module_name: str):
-    """Execs the function/class definitions of a utils/prepare*.py script,
+    """Execs the function/class definitions of a scripts/utils/prepare*.py script,
     stopping before its trailing `if case == '...':` dataset-export blocks
     (which do heavy I/O against external, not-checked-out datasets and are
     out of scope for a CPU/CI-fast guard test).

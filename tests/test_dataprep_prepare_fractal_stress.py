@@ -1,15 +1,15 @@
 """Data-prep guard (tier: dataprep) for
-utils/prepare.fractal.stress.eqdyna.4gns.py.
+scripts/utils/prepare.fractal.stress.eqdyna.4gns.py.
 
 This script shares the same create_train_data() nskip/timestep logic as
-utils/prepare.eqdyna.4gns.py (and the same shipped-then-fixed zero-tail bug
-class -- PR #5 / commit 1afb989), with node_property sourced from a
-fractal_stress.txt lookup instead of an asperity list, and node_type always
-hard-set to 0 (no fault_boundary_node_type_mask parameter in this script --
-see the note on test_no_all_zero_frames below).
+scripts/utils/prepare.eqdyna.4gns.py (and the same shipped-then-fixed
+zero-tail bug class -- PR #5 / commit 1afb989), with node_property sourced
+from a fractal_stress.txt lookup instead of an asperity list, and node_type
+always hard-set to 0 (no fault_boundary_node_type_mask parameter in this
+script -- see the note on test_no_all_zero_frames below).
 
 Uses a tiny synthetic 4-node, 13-frame EQdyna-output case built on the fly
-by test/fixtures/dataprep/synth_case.py -- never gns-sample or any real
+by tests/fixtures/dataprep/synth_case.py -- never gns-sample or any real
 scenario dataset.
 """
 import os
@@ -27,7 +27,7 @@ from fixtures.dataprep.synth_case import (  # noqa: E402
 pytestmark = pytest.mark.dataprep
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = REPO_ROOT / "utils" / "prepare.fractal.stress.eqdyna.4gns.py"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "utils" / "prepare.fractal.stress.eqdyna.4gns.py"
 
 # Normalized shear stress expected at each of the 4 fixture stations, derived
 # by hand from synth_case.write_fractal_stress()'s 40/41/42/43 MPa rows and

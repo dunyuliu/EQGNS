@@ -2,7 +2,7 @@
 MeshSimulator -> optimizer, checkpoint save/resume, and train.rollout(),
 wired together the way meshnet/train.py actually wires them (no mocks).
 
-Uses the tiny synthetic dataset (test/fixtures/meshnet/synth.py), never the
+Uses the tiny synthetic dataset (tests/fixtures/meshnet/synth.py), never the
 249GB gns-sample data.
 """
 import os

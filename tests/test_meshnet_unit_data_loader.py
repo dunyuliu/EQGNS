@@ -1,6 +1,6 @@
 """Unit tests for meshnet.data_loader (tier 1: fast, shape/behaviour checks).
 
-Uses the tiny synthetic dataset in test/fixtures/meshnet/synth.py instead of
+Uses the tiny synthetic dataset in tests/fixtures/meshnet/synth.py instead of
 the (not checked out, 249GB) gns-sample data.
 """
 import pytest

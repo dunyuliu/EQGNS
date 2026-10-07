@@ -4,7 +4,7 @@ This test protects the invariant demanded by PROJECT_RULES.md rule 1: a
 refactor of meshnet/train.py's train()/validation() loop must not change
 observable behaviour. It runs the SAME tiny deterministic training config
 (same synthetic dataset, same fixed seed via
-test/fixtures/meshnet/seeded_pipeline_cli.py) through TWO separate
+tests/fixtures/meshnet/seeded_pipeline_cli.py) through TWO separate
 subprocess invocations of the real `python3 -m meshnet.train` CLI entry
 point, each importing `meshnet` from its own tree ("tree A" = this
 worktree's checked-out `meshnet/` as-is, "tree B" = a byte-for-byte copy of
@@ -19,7 +19,7 @@ to point `SECOND_TREE_MESHNET_SRC` (see below) at a candidate worktree's
 `meshnet/` directory instead of copying tree A, e.g.:
 
     SECOND_TREE_MESHNET_SRC=/home/utig5/dliu/eqgns-worktrees/kai-refactor/meshnet \
-        pytest test/test_ab_seeded_determinism.py -q
+        pytest tests/test_ab_seeded_determinism.py -q
 
 then the run-B loss sequence would come from the refactored code and any
 divergence beyond float32 round-off fails the test immediately, per-step,
@@ -39,7 +39,7 @@ import pytest
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CLI_RELATIVE = os.path.join("test", "fixtures", "meshnet", "seeded_pipeline_cli.py")
+CLI_RELATIVE = os.path.join("tests", "fixtures", "meshnet", "seeded_pipeline_cli.py")
 
 DATASET_SEED = 555
 TIMESTEPS = 24
@@ -74,7 +74,7 @@ def _parse_loss_log(path):
 
 
 def _run_training(cli_path, tree_root, data_dir, model_dir, overrides_model_dir):
-    sys.path.insert(0, os.path.join(REPO_ROOT, "test"))
+    sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
     from fixtures.meshnet.synth import write_config
 
     write_config(str(overrides_model_dir), overrides={"loss_report_step": LOSS_REPORT_STEP})
@@ -121,7 +121,7 @@ def _make_second_tree(tmp_path):
     shutil.copytree(gns_src, second_tree / "gns",
                      ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 
-    dest_cli_dir = second_tree / "test" / "fixtures" / "meshnet"
+    dest_cli_dir = second_tree / "tests" / "fixtures" / "meshnet"
     dest_cli_dir.mkdir(parents=True)
     shutil.copy(os.path.join(REPO_ROOT, CLI_RELATIVE), dest_cli_dir / "seeded_pipeline_cli.py")
 
@@ -137,7 +137,7 @@ def test_ab_training_loss_sequence_is_bitwise_reproducible_across_trees(tmp_path
     This is the null-hypothesis case (A vs copy-of-A). A real refactor gate
     points SECOND_TREE_MESHNET_SRC at the refactor worktree instead.
     """
-    sys.path.insert(0, os.path.join(REPO_ROOT, "test"))
+    sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
     from fixtures.meshnet.synth import build_dataset
 
     data_dir = tmp_path / "data"

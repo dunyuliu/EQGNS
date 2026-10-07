@@ -1,6 +1,6 @@
 """Run a meshnet train.py in torch deterministic mode.
 
-    python3 test/paper_parity/det_rollout.py {current|published} --mode=rollout ...
+    python3 tests/paper_parity/det_rollout.py {current|published} --mode=rollout ...
 
 `published` runs meshnet/train.py.published (the code behind the paper).
 """

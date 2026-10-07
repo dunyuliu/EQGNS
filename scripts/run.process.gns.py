@@ -3,6 +3,15 @@ import argparse
 import os
 from itertools import product
 
+# This script lives in scripts/ (PROJECT_RULES.md rule 9); the meshnet/gns
+# packages its `python3 -m meshnet.train` subprocesses import stay at the
+# repo root. Resolve the repo root from __file__, not the cwd, so those
+# subprocesses resolve whether this is invoked as
+# `python3 scripts/run.process.gns.py ...` from the repo root or as
+# `python3 run.process.gns.py ...` from inside scripts/.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def run_command(command, env):
     """Runs a command and prints its output."""
     # Set environment variables for this process
@@ -41,6 +50,10 @@ def train(args, learning_rates, batch_sizes, noise_stds, nmessage_passing_steps)
         env["PATH"] = env.get("PATH", "") + ":" + env["CUDA"]
         env["LD_LIBRARY_PATH"] = env.get("LD_LIBRARY_PATH", "") + ":" + env["CUDA"]
         env["OMP_NUM_THREADS"] = "1"
+        # So `python3 -m meshnet.train` below finds the meshnet/gns packages
+        # regardless of this process's own cwd (see REPO_ROOT above).
+        env["PYTHONPATH"] = os.pathsep.join(
+            [REPO_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
         
         model_suffix = f"{args.model_suffix}_lr{lr}_bs{batch_size}_ns{noise_std}_nmp{nmessage_passing_steps}_{args.machine_name}"
         model_path = os.path.join(args.working_dir, f'models.{model_suffix}', '')
@@ -90,6 +103,10 @@ def rollout(args):
     """Runs the rollout process."""
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
+    # So `python3 -m meshnet.train` below finds the meshnet/gns packages
+    # regardless of this process's own cwd (see REPO_ROOT above).
+    env["PYTHONPATH"] = os.pathsep.join(
+        [REPO_ROOT] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
 
     for model_id in args.model_ids:
         model_file_name = f'model-{model_id}.pt'
