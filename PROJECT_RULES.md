@@ -15,6 +15,7 @@ maintenance + new-experiment mode.
 6. Remotes and commit style
 7. Rupture-analysis conventions are stated explicitly
 8. `requirements.txt` vs `requirements.dl.txt` differ only in the numpy pin
+9. A curated root — whitelist, not a preference
 
 ---
 
@@ -147,3 +148,46 @@ from.
 **How to apply**: `diff requirements.txt requirements.dl.txt` — every line of
 the diff must be the numpy pin (or trailing-newline noise); any other diff
 line is a Tier-1 violation and gets documented here or reverted.
+
+## 9. A curated root — whitelist, not a preference
+
+The repo root carries only: the four control docs (`PROJECT_RULES.md`,
+`PATHWAY_FORWARD.md`, `README.md`, `CLAUDE.md`), `license.md`, `CITATION.cff`
+(GitHub's citation widget only reads a root-level `CITATION.cff`; this file
+does not move), `.gitignore`, `Dockerfile`, the two requirements files (rule
+8), and the two environment specs `enviornment.yml` / `gns_env.yml` — plus
+the ten tracked top-level directories: `.circleci/`, `.github/`, `docs/`,
+`example/`, `gns/`, `meshnet/`, `scripts/`, `slurm_scripts/`, `test/`,
+`utils/`. No other root-level entry is added without updating this list in
+the same change. No tracked file, anywhere in the tree, exceeds 5MB.
+
+Everything else currently at root is a named, flagged exception, not an open
+invitation:
+- `AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` — GitHub
+  reads these equally from `.github/`; no reference to their root path was
+  found elsewhere, so they can move there on their own.
+- `train.sh`, `run.sh`, `resume.train.sh`, `asp.rollout.sh`, `module.sh` —
+  no doc or CI reference to these root paths was found at the time of
+  writing; they can move to `scripts/` on their own.
+- `build_venv.sh`, `build_venv_frontera.sh`, `start_venv.sh`,
+  `train_cli.py`, `run.process.gns.py`, `scenario.rollout.py`, `render.sh`,
+  `render.cpu.sh` — root-level entry points invoked by path in `README.md`
+  (and, for the three Python drivers, named in rule 5). A move to
+  `scripts/` is legitimate but only together with the matching README.md
+  (and rule 5, if the Python drivers move) edit in the same commit (rule
+  11) — never the file move alone.
+- `docs/img/meshnet.gif` is currently 10.7MB, over the 5MB cap. It is a
+  violation to fix (Git LFS or external hosting), not a precedent for a
+  second large asset.
+
+**Rationale**: a root with no agreed membership accretes one script at a
+time until a build artifact is indistinguishable from an entry point;
+GitHub-recognized alternate locations exist for exactly the community-health
+files above and cost nothing to use.
+
+**How to apply**: `scripts/check_root.py` enforces this list and the 5MB
+cap, and report-only lists other worktrees and already-merged branches for
+manual tidy-up (never fails the gate on those). A PR adding a root-level
+file either lands on this list or edits this rule to add it, in the same
+commit. A PR moving one of the named exceptions above routes its doc-sync
+half (README.md / rule 5) to whoever owns docs, not to this rule.
