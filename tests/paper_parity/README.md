@@ -13,7 +13,7 @@ python3 tests/paper_parity/gate.py run M1_D1        # one case
 pytest tests/paper_parity --paper-parity -q         # same, via pytest
 ```
 
-Needs `gns-sample/` (published checkpoints and test sets) and a GPU. Skipped in CI.
+Needs `data/gns-sample/` (published checkpoints and test sets) and a GPU. Skipped in CI.
 
 ## How it decides
 

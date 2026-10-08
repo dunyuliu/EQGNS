@@ -21,7 +21,7 @@ use_batch_rollout = False  # Set to True to use batch rollout functionality
 
 if case == 0:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/gns-sample/case4.200m.multi.stress.160scenarios.homo.a.Vw": [
+        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.160scenarios.homo.a.Vw": [
             "nmp10.lr3e-5.b8.cotopaxi.r1"
             #"nmp10.lr3e-5.b8.n5e-3.cotopaxi.r1",
             #"nmp10.b4.cotopaxi.r1",
@@ -30,7 +30,7 @@ if case == 0:
     }
 elif case == 1:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/work.test/case4.200m.multi.stress.homo.a.Vw": [
+        "/home/utig5/dliu/eq_rupture_gns/runs/20250902_work-test/case4.200m.multi.stress.homo.a.Vw": [
 #            "r1_lr3e-05_bs2_ns0.005_nmp10_knox",
 #            "r1_lr3e-05_bs2_ns0.005_nmp5_knox",
 #            "r1_lr0.0001_bs2_ns0.005_nmp10_knox",
@@ -44,7 +44,7 @@ elif case == 1:
     }
 elif case == 2:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/gns-sample/case4.200m.fractal.stress.homo.a.Vw": [
+        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.fractal.stress.homo.a.Vw": [
             "nmp10.cotopaxi.r1",
             "nmp5.cotopaxi.r1",
             "nmp15.cotopaxi.r1"
@@ -53,7 +53,7 @@ elif case == 2:
 
 elif case == 3:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.test": [
+        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.test": [
             "nmp10.cotopaxi.r1",
             "nmp5.cotopaxi.r1",
             "nmp15.cotopaxi.r1"
@@ -61,7 +61,7 @@ elif case == 3:
     }
 elif case == 4:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.others.test": [
+        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.others.test": [
             "nmp10.cotopaxi.r1",
             "nmp5.cotopaxi.r1",
             "nmp15.cotopaxi.r1"
@@ -69,7 +69,7 @@ elif case == 4:
     }
 elif case == 5:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/gns-sample/case4.200m.multi.stress.homo.a.Vw": [
+        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.homo.a.Vw": [
              "nmp10.cotopaxi"
 #            "nmp10.cotopaxi.r1"
 #            "nmp5.cotopaxi.r1",
@@ -87,13 +87,13 @@ elif case == 6:
     }
 elif case == 7:
     model_suffixes = {
-        "/home/staff/dliu/eq_rupture_gns/gns-sample/case3.200m.homo.a.Vw.others/": [
+        "/home/staff/dliu/eq_rupture_gns/data/gns-sample/case3.200m.homo.a.Vw.others/": [
         "nmp10.cotopaxi"
         ]
     }
 elif case == 8:
     model_suffixes = {
-        "/home/staff/dliu/eq_rupture_gns/gns-sample/case3.200m.homo.a.Vw.others/": [
+        "/home/staff/dliu/eq_rupture_gns/data/gns-sample/case3.200m.homo.a.Vw.others/": [
         "nmp10.cotopaxi"
         ]
     }

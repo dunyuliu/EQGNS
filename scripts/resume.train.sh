@@ -2,7 +2,7 @@
 
 nstep=400000
 
-TMP_DIR="./gns-sample"
+TMP_DIR="./data/gns-sample"
 DATASET_NAME="WaterDropSample"
 
 mkdir -p ${TMP_DIR}/${DATASET_NAME}/models/

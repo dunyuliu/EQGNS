@@ -5,7 +5,7 @@ total, launched concurrently on GPU 2.
 
 ## Setup
 - Seeds: `--seed 0`, `--seed 1`, `--seed 2`, identical across both arms.
-- Config: `gns-sample/case3.200m.homo.a.Vw/models.nmp10.cotopaxi/config.json`
+- Config: `data/gns-sample/case3.200m.homo.a.Vw/models.nmp10.cotopaxi/config.json`
   copied verbatim into each run's `model_path` (lr 1e-4, batch 2 via
   `--batch_size=2`, `simulator_nmessage_passing_steps=10`, `noise_std=2e-2`
   — matches paper Table 2; config.json is required or train.py silently
@@ -14,7 +14,7 @@ total, launched concurrently on GPU 2.
   steps (`--ntraining_steps=500000`).
 - Fixed-D1 arm data: `/home/utig5/dliu/eq_rupture_gns_data/D1_fixed/dataset/`
   (regenerated this session, nskip loop-bound fix, PR #5).
-- Old-D1 arm data: `gns-sample/case3.200m.homo.a.Vw/dataset/` (published,
+- Old-D1 arm data: `data/gns-sample/case3.200m.homo.a.Vw/dataset/` (published,
   read-only, buggy zero-tail — used as-is, intentionally, as the control).
 - Launched via `CUDA_VISIBLE_DEVICES=2 OMP_NUM_THREADS=2 setsid nohup
   venv/bin/python3 -m meshnet.train ...`, detached (survives this session),
@@ -117,7 +117,7 @@ run's `model-500000.pt` as a SENTINEL (not a loss_log poll):
   steps on whichever of GPU1/GPU2 is free.
 - Published M1 also scored at the same matching 5 steps (published
   checkpoints DO exist at exactly 100k/200k/300k/400k/500k under
-  gns-sample/case3.200m.homo.a.Vw/models.nmp10.cotopaxi/) -- NOT the
+  data/gns-sample/case3.200m.homo.a.Vw/models.nmp10.cotopaxi/) -- NOT the
   3,000,000-step final published checkpoint, matched-step only.
 - All scored on the FIXED-D1 test set (same test set for both arms +
   published, isolating the training-data effect).

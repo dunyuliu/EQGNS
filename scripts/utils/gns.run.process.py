@@ -15,7 +15,7 @@ def prepare_run_folder(data, model_suffix, learning_rate, num_message_passing_st
     """
     Prepare folder and config.json for training
     """
-    SCRATCH = "./gns-sample"
+    SCRATCH = "./data/gns-sample"
     data_path = Path(SCRATCH) / data / "dataset"
     run_folder = Path(SCRATCH) / data
     model_path = Path(SCRATCH) / data / f"models.{model_suffix}"
@@ -62,7 +62,7 @@ def rollout_model(data, model_suffix, gpu_id, model_file, testset_name, render_o
     """
     Run rollout for a trained model, dynamically rendering based on existing .pkl files
     """
-    TMP_DIR = Path.cwd() / "gns-sample"
+    TMP_DIR = Path.cwd() / "data" / "gns-sample"
     DATA_PATH = TMP_DIR / data / "dataset"
     MODEL_PATH = TMP_DIR / data / f"models.{model_suffix}"
     ROLLOUT_PATH = TMP_DIR / data / f"rollouts.{model_suffix}/{model_file}"
@@ -73,7 +73,7 @@ def rollout_model(data, model_suffix, gpu_id, model_file, testset_name, render_o
     ROLLOUT_PATH.mkdir(parents=True, exist_ok=True)
 
     # Copy test dataset and metadata
-    #shutil.copyfile(Path("dataset_archive") / testset_name, DATA_PATH / "test.npz")
+    #shutil.copyfile(Path("data/dataset_archive") / testset_name, DATA_PATH / "test.npz")
     shutil.copyfile(DATA_PATH / "testset_metadata.json", ROLLOUT_PATH / "testset_metadata.json")
 
     # Skip if .pkl files exist (already rolled out)

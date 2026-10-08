@@ -31,7 +31,7 @@ model_suffix=$2
 gpu_id=$3
 batch_size=$4
 
-SCRATCH="./gns-sample"
+SCRATCH="./data/gns-sample"
 export CUDA=/usr/local/cuda-12/
 export PATH=$PATH:${CUDA}
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CUDA}

@@ -8,7 +8,7 @@ all-zero in the published D1 dataset — change M1 training outcomes.
 - Two arms, 3 seeds each (`--seed 0/1/2`, identical across arms, via the
   opt-in seeding in PR #8): **fixed** trains on the regenerated
   `D1_fixed/dataset/` (no zero-tail); **old** (control) trains on the
-  published, still-buggy `gns-sample/case3.200m.homo.a.Vw/dataset/` as-is.
+  published, still-buggy `data/gns-sample/case3.200m.homo.a.Vw/dataset/` as-is.
 - Identical config both arms: `models.nmp10.cotopaxi/config.json` (paper
   Table 2 — lr 1e-4, batch 2, 10 message-passing steps, noise 0.02),
   500,000 steps, checkpoints every 50,000.

@@ -1,4 +1,4 @@
-"""pytest wrapper for the paper-parity gate (opt-in: needs gns-sample/ and a GPU).
+"""pytest wrapper for the paper-parity gate (opt-in: needs data/gns-sample/ and a GPU).
 
     pytest tests/paper_parity --paper-parity -q
 """

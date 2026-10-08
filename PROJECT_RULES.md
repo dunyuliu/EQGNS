@@ -10,7 +10,7 @@ maintenance + new-experiment mode.
 1. Published-paper state is frozen
 2. Citation surfaces stay intact
 3. Large/raw data directories never get committed
-4. Experiments are isolated in `work.*`
+4. Experiments are isolated in `scratch/` and `runs/`
 5. Docs must match the drivers they document
 6. Remotes and commit style
 7. Rupture-analysis conventions are stated explicitly
@@ -58,34 +58,39 @@ appeared before.
 
 ## 3. Large/raw data directories never get committed
 
-`gns-sample/` (249GB), `work.test/`, `dataset_archive/`, `model/`, `venv*/`,
-`misc/` are gitignored and stay that way. Raw datasets under these paths are
-read-only inputs to experiments — nothing writes through them in place.
+Raw data lives under git-ignored `data/` (`data/gns-sample/`, 249GB, and
+`data/dataset_archive/`); experiment outputs under `runs/<YYYYMMDD>_<slug>/`;
+throwaway work under `scratch/`. All are gitignored and stay that way. Raw
+datasets under `data/` are read-only inputs — nothing writes through them in
+place. Two ignored venvs stay at the root because their compiled extensions
+bake the path and other projects activate them by path: `venv/` and
+`venv_cotopaxi/` (moving either = a rebuild, owner-only). A root symlink
+`gns-sample -> data/gns-sample` stays until no outside script reads the old
+path (board row untracked-root-reorg).
 
 **Rationale**: multi-hundred-GB directories and generated model artifacts do
 not belong in git history; treating raw data as read-only prevents an
 experiment from silently corrupting the ground truth another experiment
 depends on.
 
-**How to apply**: `git check-ignore -v gns-sample work.test dataset_archive
-model venv venv_cotopaxi misc` must report each as ignored; `git status
---porcelain` must never list a file under these paths as untracked-to-add.
+**How to apply**: `git check-ignore -v data runs scratch venv venv_cotopaxi`
+must report each as ignored; `python3 scripts/check_root.py` lists any
+untracked root entry outside the template (report-only).
 
-## 4. Experiments are isolated in `work.*`
+## 4. Experiments are isolated in `scratch/` and `runs/`
 
-New/exploratory code lives in git-ignored `work.*` directories (e.g.
-`work.cnn/`), excluded via `.gitignore` or `.git/info/exclude`. Experimental
+New/exploratory code lives in git-ignored `scratch/` (or a dated
+`runs/<YYYYMMDD>_<slug>/` when it produces results). Experimental
 code never lands in `gns/` or `meshnet/` until it is proven and consciously
-merged as a reviewed change. `work.cnn/` carries its own `PROJECT_RULES.md`
-scoped to that experiment — this rule book does not edit or govern its
-contents.
+merged as a reviewed change. An experiment directory may carry its own
+`PROJECT_RULES.md` scoped to it; this rule book does not govern its contents.
 
 **Rationale**: keeps `gns/` and `meshnet/` — the paper-adjacent, load-bearing
 code — free of half-finished experimental branches.
 
-**How to apply**: `git ls-files work.cnn work.test 2>/dev/null` should be
+**How to apply**: `git ls-files scratch runs 2>/dev/null` should be
 empty (both are ignored, not tracked); a change touching `gns/` or `meshnet/`
-that originated in a `work.*` directory names the experiment it was promoted
+that originated in `scratch/` or `runs/` names the experiment it was promoted
 from in the commit body.
 
 ## 5. Docs must match the drivers they document

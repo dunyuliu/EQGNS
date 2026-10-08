@@ -78,7 +78,7 @@ Available datasets include:
 
     args = parser.parse_args()
 
-    scratch = "./gns-sample"
+    scratch = "./data/gns-sample"
     cuda_path = "/usr/local/cuda-12/"
 
     env = os.environ.copy()

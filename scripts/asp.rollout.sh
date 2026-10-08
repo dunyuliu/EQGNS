@@ -6,7 +6,7 @@ DATASET_NAME="case2.eq.meshnet" #"eq.r50"
 #DATASET_NAME="WaterDropSample.r003"
 echo "please input the model name to rollout on:"
 model_name=$1
-TMP_DIR=$(pwd)"/gns-sample"
+TMP_DIR=$(pwd)"/data/gns-sample"
 DATA_PATH="${TMP_DIR}/${DATASET_NAME}/dataset/"
 MODEL_PATH="${TMP_DIR}/${DATASET_NAME}/models${prefix}/"
 ROLLOUT_PATH="${TMP_DIR}/${DATASET_NAME}/rollouts${prefix}/"
