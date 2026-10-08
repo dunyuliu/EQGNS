@@ -54,4 +54,4 @@ def pytest_configure(config):
 
 def pytest_addoption(parser):
     parser.addoption("--paper-parity", action="store_true", default=False,
-                     help="run the paper-parity gate (needs gns-sample/ and a GPU)")
+                     help="run the paper-parity gate (needs data/gns-sample/ and a GPU)")

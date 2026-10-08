@@ -35,7 +35,7 @@ README, section "Datasets").
 The training/rollout drivers assume a *working directory* per case:
 
 ```
-<working_dir>/               e.g. gns-sample/case4.200m.multi.stress.homo.a.Vw/
+<working_dir>/               e.g. data/gns-sample/case4.200m.multi.stress.homo.a.Vw/
 ├── config.json              model/system configuration (see docs/user/training.md)
 ├── dataset/                 train.npz, valid.npz, test.npz, metadata.json
 ├── models.<suffix>/         checkpoints, one directory per training run

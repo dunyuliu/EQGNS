@@ -39,7 +39,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-DATA = REPO / "gns-sample"
+DATA = REPO / "data" / "gns-sample"
 PUBLISHED = HERE / "published.json"   # metrics of the published rollout files
 REFERENCE = HERE / "reference.json"   # metrics of train.py.published, deterministic
 
