@@ -42,7 +42,7 @@ RESULTS_DIR = M1_RETRAIN / "eval_results"
 # absolute, env-overridable path rather than derived from REPO). Override
 # with EQGNS_MAIN_REPO on another machine/checkout.
 MAIN_REPO = Path(os.environ.get("EQGNS_MAIN_REPO", "/home/utig5/dliu/eq_rupture_gns"))
-PUBLISHED_MODEL_DIR = MAIN_REPO / "gns-sample" / "case3.200m.homo.a.Vw" / "models.nmp10.cotopaxi"
+PUBLISHED_MODEL_DIR = MAIN_REPO / "data" / "gns-sample" / "case3.200m.homo.a.Vw" / "models.nmp10.cotopaxi"
 STEPS = [100000, 200000, 300000, 400000, 500000]
 ARMS = ("fixed", "old")
 

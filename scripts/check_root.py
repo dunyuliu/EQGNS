@@ -73,6 +73,14 @@ PENDING_LARGE_FILES = {
 
 MAX_BYTES = 5 * 1024 * 1024
 
+# Git-ignored local entries the template allows inside the root (rule 3/9).
+# Anything else on disk at the root is listed by the tidy step (report-only).
+LOCAL_ALLOWED = {
+    ".git", ".claude", ".pytest_cache", "data", "runs", "scratch",
+    "venv", "venv_cotopaxi",  # path-baked venvs used by path (rule 3)
+    "gns-sample",  # compat symlink -> data/gns-sample (rule 3)
+}
+
 
 def run(cmd):
     return subprocess.run(
@@ -134,6 +142,12 @@ def report_pending(pending_large):
 
 def report_tidy():
     print("--- tidy (report-only, does not affect exit code) ---")
+    import os
+    root = run(["git", "rev-parse", "--show-toplevel"]).strip()
+    tracked = {p.split("/")[0] for p in run(["git", "ls-files"]).splitlines()}
+    for entry in sorted(os.listdir(root)):
+        if entry not in tracked and entry not in LOCAL_ALLOWED:
+            print(f"  untracked root entry outside the template: {entry}")
     worktrees = run(["git", "worktree", "list"]).strip().splitlines()
     for w in worktrees[1:]:
         print(f"  other worktree: {w}")

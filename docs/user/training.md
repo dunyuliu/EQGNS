@@ -22,7 +22,7 @@ python3 scripts/train_cli.py <dataset-name> <model_suffix> <gpu_id> <batch_size>
 python3 scripts/train_cli.py case3.200m nmp10.cotopaxi 0 2
 ```
 
-Assumes the working directory `./gns-sample/<dataset-name>/` and sets
+Assumes the working directory `data/gns-sample/<dataset-name>/` and sets
 `CUDA_VISIBLE_DEVICES` and `OMP_NUM_THREADS=1` for you.
 
 ## 3. Hyperparameter sweep: `scripts/run.process.gns.py`
