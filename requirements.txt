@@ -5,6 +5,7 @@ dm-tree==0.1.9
 matplotlib==3.10.1
 pyevtk==1.6.0
 pytest==8.3.5
+scikit-learn==1.7.2
 torch==2.6.0
 torch_geometric==2.6.1
 torch_sparse==0.6.18
