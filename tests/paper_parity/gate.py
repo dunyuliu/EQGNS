@@ -404,7 +404,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["run", "quick", "reference", "paper", "extract", "falsify", "fast"])
     ap.add_argument("cases", nargs="*", help=f"default: all of {list(CASES)}")
-    ap.add_argument("--cuda", default="0", help="GPU id(s), comma-separated; cases run in parallel")
+    ap.add_argument("--cuda", required=True, help="GPU id(s), comma-separated; cases run in parallel (no default -- pick explicitly, GPU0 often hosts unrelated jobs on this box)")
     ap.add_argument("--quick", action="store_true", help="quick-tier variant")
     ap.add_argument("--precision", default="fp16", help="fast tier: --rollout_fast value")
     ap.add_argument("--falsify", action="store_true", help="fast tier: planted regression must FAIL")
