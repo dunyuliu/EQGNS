@@ -269,5 +269,6 @@ def test_fast_rollout_matches_batched_rollout_cpu(tiny_simulator, dataset_dir):
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 def test_fast_rollout_compiled_graphed_matches_cuda(tiny_simulator, dataset_dir):
     """Same, with torch.compile and the per-step CUDA graph (fp32)."""
-    _fast_vs_reference(tiny_simulator, dataset_dir, torch.device("cuda"),
+    # the last GPU, so a capture on the default device instead of the tensors' fails here
+    _fast_vs_reference(tiny_simulator, dataset_dir, torch.device(f"cuda:{torch.cuda.device_count() - 1}"),
                        precision="fp32", compile=True, cuda_graph=True)

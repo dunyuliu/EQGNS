@@ -6,7 +6,11 @@ static rollout graph, restructured for inference:
   - the edge encoder run once (edge features never change during a rollout);
   - each edge MLP's first layer factorized, W [x_i, x_j, e] = (x W_i)[dst] + (x W_j)[src] + e W_e,
     so the two 128-wide node blocks are multiplied per node instead of per edge;
-  - optional TF32 / bf16 matmuls, torch.compile, and one CUDA graph per step.
+  - edges stored as (node, slot) with each node's incoming edges in its own row (slots padded to
+    the maximum in-degree, 6 on the 2D meshes): the dst term is a broadcast, and the 'add'
+    aggregation a masked sum over slots, so there is no scatter, no atomics, and the order of
+    summation is fixed (deterministic, and capturable in a CUDA graph under deterministic mode);
+  - optional TF32 matmuls or fp16 / bf16 autocast, torch.compile, and one CUDA graph per step.
 Rounding differs from the default path, and the autoregressive rollout amplifies it, so this path
 is for evaluation and screening, never for the paper-parity gate.
 """
@@ -15,7 +19,8 @@ import torch_geometric.transforms as T
 
 from meshnet.utils import datas_to_graph, NodeType
 
-PRECISIONS = ("fp32", "tf32", "bf16")
+PRECISIONS = ("fp32", "tf32", "fp16", "bf16")
+_AUTOCAST = {"fp16": torch.float16, "bf16": torch.bfloat16}
 _transformer = T.Compose([T.FaceToEdge(), T.Cartesian(norm=False), T.Distance(norm=False)])
 
 
@@ -25,7 +30,23 @@ class FastStep(torch.nn.Module):
     def __init__(self, simulator, edge_index, edge_attr, node_type, node_property, dims):
         super().__init__()
         self.epd = simulator._encode_process_decode
-        self.src, self.dst = edge_index[0].contiguous(), edge_index[1].contiguous()
+        src, dst = edge_index
+        nnodes, nedges = node_type.shape[0], dst.shape[0]
+        degree = torch.bincount(dst, minlength=nnodes)
+        slots = int(degree.max())
+        order = torch.argsort(dst, stable=True)
+        first = torch.cumsum(degree, 0) - degree
+        rank = torch.arange(nedges, device=dst.device) - first[dst[order]]
+        flat = dst[order] * slots + rank
+        self.src = torch.zeros(nnodes * slots, dtype=src.dtype, device=src.device)
+        self.src[flat] = src[order]
+        self.src = self.src.view(nnodes, slots)
+        valid = torch.zeros(nnodes * slots, dtype=torch.bool, device=dst.device)
+        valid[flat] = True
+        self.valid = valid.view(nnodes, slots, 1)
+        attr = torch.zeros(nnodes * slots, edge_attr.shape[1], dtype=edge_attr.dtype, device=edge_attr.device)
+        attr[flat] = edge_attr[order]
+        edge_attr = attr.view(nnodes, slots, -1)
         mean = simulator._node_normalizer._mean()
         std = simulator._node_normalizer._std_with_epsilon()
         onehot = torch.nn.functional.one_hot(node_type.long().squeeze(), simulator._node_type_embedding_size)
@@ -44,11 +65,11 @@ class FastStep(torch.nn.Module):
         w, b = mlp[0].weight, mlp[0].bias
         width, hidden = x.shape[1], w.shape[0]
         xw = x @ torch.cat([w[:, :width], w[:, width:2 * width]], 0).t()  # (nnodes, 2 * hidden)
-        h = xw[self.dst, :hidden] + xw[self.src, hidden:] + torch.nn.functional.linear(e, w[:, 2 * width:], b)
+        h = xw[:, None, :hidden] + xw[self.src, hidden:] + torch.nn.functional.linear(e, w[:, 2 * width:], b)
         for module in list(mlp)[1:]:
             h = module(h)
-        h = norm(h)
-        agg = torch.zeros(x.shape[0], h.shape[1], device=x.device, dtype=h.dtype).index_add_(0, self.dst, h)
+        h = norm(h)  # (nnodes, slots, hidden); padded slots carry junk and are masked out here
+        agg = torch.where(self.valid, h, torch.zeros((), dtype=h.dtype, device=h.device)).sum(1)
         return layer.node_fn(torch.cat([agg, x], -1)) + x, h + e
 
     def forward(self, velocities, truth):
@@ -110,26 +131,33 @@ def rollout_fast(simulator, features_list, nsteps, device, precision="tf32",
 
     tf32 = (torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32)
     torch.backends.cuda.matmul.allow_tf32 = torch.backends.cudnn.allow_tf32 = precision == "tf32"
+    # Deterministic mode NaN-fills every torch.empty, which a CUDA graph capture cannot take. Every
+    # buffer here is written before it is read, so the fill changes nothing; results stay
+    # deterministic (fixed-order slot sums, no atomics).
+    fill = torch.utils.deterministic.fill_uninitialized_memory
+    torch.utils.deterministic.fill_uninitialized_memory = False
     try:
         with torch.no_grad():
             model = FastStep(simulator, edge_index, edge_attr, node_type, node_prop, velocities.shape[1])
             fn = model.forward
-            if precision == "bf16":
+            if precision in _AUTOCAST:
                 plain = fn
 
                 def fn(v, t):
-                    with torch.autocast(device.type, dtype=torch.bfloat16):
+                    with torch.autocast(device.type, dtype=_AUTOCAST[precision]):
                         return plain(v, t)
             if compile:
                 fn = torch.compile(fn, dynamic=False)
             if cuda_graph and device.type == "cuda":
-                fn = _graphed(fn, velocities, truth[0])
+                with torch.cuda.device(device):  # capture streams live on the current device
+                    fn = _graphed(fn, velocities, truth[0])
             predictions = torch.empty((nsteps,) + tuple(velocities.shape), dtype=velocities.dtype, device=device)
             for step in range(nsteps):
                 velocities = fn(velocities, truth[step])
                 predictions[step] = velocities
     finally:
         torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32 = tf32
+        torch.utils.deterministic.fill_uninitialized_memory = fill
 
     outputs = []
     for p, o in zip(parts, offsets):

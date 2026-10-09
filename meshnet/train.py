@@ -48,9 +48,9 @@ flags.DEFINE_integer('rollout_batch_size', 1, help=(
     'Default 1: the original one-trajectory-at-a-time path, bit-identical to before. '
     '>1: same math per trajectory, but rounding differs and long rollouts can diverge during '
     'active rupture; use for evaluation, not for the paper-parity gate (docs/user/ROLLOUT_BATCHING.md).'))
-flags.DEFINE_enum('rollout_fast', 'off', ['off', 'fp32', 'tf32', 'bf16'], help=(
+flags.DEFINE_enum('rollout_fast', 'off', ['off', 'fp32', 'tf32', 'fp16', 'bf16'], help=(
     'Opt-in fast rollout (meshnet/fast_rollout.py): static-graph restructured GNN, torch.compile and '
-    'a CUDA graph per step, with fp32 / tf32 / bf16 matmuls. Default off: the original path. '
+    'a CUDA graph per step, with fp32 / tf32 / fp16 / bf16 matmuls. Default off: the original path. '
     'Rounding differs, so use for evaluation, not for the paper-parity gate (docs/dev/ROLLOUT_SPEED.md).'))
 flags.DEFINE_boolean('deterministic', False, help=(
     'Only meaningful with --seed set. Additionally asks torch for deterministic kernels '
