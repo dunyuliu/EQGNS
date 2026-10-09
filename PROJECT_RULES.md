@@ -14,7 +14,7 @@ maintenance + new-experiment mode.
 5. Docs must match the drivers they document
 6. Remotes and commit style
 7. Rupture-analysis conventions are stated explicitly
-8. `requirements.txt` vs `requirements.dl.txt` differ only in the numpy pin
+8. One `requirements.txt`, every entry pinned with `==`
 9. A curated root — the template is the target, not the status quo
 
 ---
@@ -140,19 +140,21 @@ time-offset constant; if a rupture-time or slip-rate calculation appears
 with none of these named, it is a Tier-2 finding routed to whoever owns that
 script.
 
-## 8. `requirements.txt` vs `requirements.dl.txt` differ only in the numpy pin
+## 8. One `requirements.txt`, every entry pinned with `==`
 
-`requirements.txt` leaves numpy unpinned (local servers); `requirements.dl.txt`
-pins `numpy==1.23.1`. This is the only intended difference between the two
-files.
+There is a single `requirements.txt` for every environment (local servers
+included). Every line is pinned with `==` — no unpinned minimum version, and
+no transitive `pip freeze` dump: an `nvidia-*` CUDA wheel pinned verbatim
+would break CPU CI.
 
-**Rationale**: two requirements files that silently diverge on more than the
-one documented axis make it unclear which environment a bug report came
-from.
+**Rationale**: a second requirements file (or an unpinned line in the one
+file) drifts silently from the stack a bug report actually ran on; one
+pinned file is the only thing that can be diffed against what shipped.
 
-**How to apply**: `diff requirements.txt requirements.dl.txt` — every line of
-the diff must be the numpy pin (or trailing-newline noise); any other diff
-line is a Tier-1 violation and gets documented here or reverted.
+**How to apply**: a check in `scripts/check_root.py` fails on any
+`requirements.txt` line without `==`. (As of this writing that check does
+not exist yet; it ships with the `no-conda-docs-hygiene` PR. Until it lands,
+`grep -vE '==' requirements.txt` returning empty is the manual gate.)
 
 ## 9. A curated root — the template is the target, not the status quo
 
@@ -161,13 +163,15 @@ where it happens to sit today. The template:
 
 - the four control docs (`PROJECT_RULES.md`, `PATHWAY_FORWARD.md`,
   `README.md`, `CLAUDE.md`)
-- `license.md`, `CITATION.cff` (GitHub's citation widget only reads a
+- `LICENSE`, `CITATION.cff` (GitHub's citation widget only reads a
   root-level `CITATION.cff`; this file does not move), `.gitignore`,
-  `Dockerfile`, the two requirements files (rule 8), and the two environment
-  specs `enviornment.yml` / `gns_env.yml`
-- `.circleci/`, `.github/` — community-health files (`AUTHORS.md`,
-  `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md`) live under `.github/`;
-  GitHub reads them there equally
+  `Dockerfile`, `requirements.txt` (rule 8), and the two environment specs
+  `enviornment.yml` / `gns_env.yml`
+- `.github/workflows/` — CI job definitions only. `.circleci/` is retired
+  (one CI provider). The community-health files that used to live under
+  `.github/` (`AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`,
+  `DCO.md`, `ISSUE_TEMPLATE/`, `pull_request_template.md`) are retired, not
+  relocated — an MIT-licensed repo needs neither CONTRIBUTING nor DCO
 - `docs/`, split `docs/user/` (tutorials, how-to, reference, explanation —
   the published site builds from here) and `docs/dev/` (design notes, logs,
   archived release notes)
@@ -193,7 +197,9 @@ change. No tracked file, anywhere in the tree, exceeds 5MB.
 Every move below has landed, each in the commit that made its coupled edit:
 
 - `AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `DCO.md` ->
-  `.github/`; `render.sh`, `render.cpu.sh` -> `scripts/` (with
+  `.github/` (subsequently retired, not relocated, under
+  `no-conda-docs-hygiene` — an MIT-licensed repo needs neither);
+  `render.sh`, `render.cpu.sh` -> `scripts/` (with
   `docs/user/rollout_and_analysis.md` updated in the same commit);
   `example/` -> `docs/user/examples/` — landed, owner anya-petrov.
 - `test/` -> `tests/`, with `.github/workflows/tests.yml` and
@@ -214,10 +220,10 @@ Every move below has landed, each in the commit that made its coupled edit:
   explanation) and `docs/dev/` (design notes, logs, internal status) —
   landed, owner anya-petrov.
 
-**Standing exception**: `docs/img/meshnet.gif` is currently 10.7MB, over the
-5MB cap; converting it to Git LFS or external hosting rewrites history for
-that path and needs the owner's sign-off, not just a PR. This is the only
-exception the gate carries (`PENDING_LARGE_FILES` in `scripts/check_root.py`).
+**Standing exception**: `docs/img/meshnet.gif` is 10.7MB, over the 5MB cap.
+Owner-approved: it stays in git, tracked normally, no Git LFS and no history
+rewrite. This is the only exception the gate carries (`PENDING_LARGE_FILES`
+in `scripts/check_root.py`).
 
 **Rationale**: a root with no agreed membership accretes one script at a
 time until a build artifact is indistinguishable from an entry point;
@@ -227,7 +233,7 @@ the status quo into "compliant," until every move above landed.
 
 **How to apply**: `scripts/check_root.py` enforces the template above
 directly, with exactly one exception mechanism left: a named, tagged entry
-in `PENDING_LARGE_FILES` for an oversized tracked file awaiting owner
-sign-off (today: `docs/img/meshnet.gif`). A PR adding a new root-level file
+in `PENDING_LARGE_FILES` for an oversized tracked file the owner has
+approved to keep (today: `docs/img/meshnet.gif`). A PR adding a new root-level file
 either lands on the allow-list or updates this rule in the same commit — an
 unlisted new entry fails the gate with no exception available.
