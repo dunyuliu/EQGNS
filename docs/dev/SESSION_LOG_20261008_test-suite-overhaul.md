@@ -742,3 +742,34 @@ Open items (not opened as board rows this session -- zofia's lane):
    Needs owner threshold-setting before it can be scored pass/fail.
 3. GPU0 timing sweep (PID 2400018, patched with LOAD_THRESHOLD=8.0 host-load
    gate) -- deadline 03:00, no completion notice received as of this entry.
+
+## 2026-10-09 cleanup addendum (conductor)
+
+Archived before deletion, per coordinator cleanup instruction:
+
+- `scratch/timing_gpu0_watch.log` (tail): `2026-10-09T03:00:07 DEADLINE REACHED,
+  GPU 0 + load never both clean. STOP AND REPORT: not measured, box busy.`
+- `scratch/timing_results_gpu0.json`: `{"status": "GPU0_NEVER_IDLE_BY_DEADLINE",
+  "results": {}}`
+- `scratch/gpu0_cutover.log` (tail): `03:00:38 stopped by coordinator: sweep hit
+  deadline, iris batch finished; watcher moot`
+
+Both watcher PIDs (GPU0 timing watcher, moot cutover watcher 1844560) confirmed
+self-terminated at the 03:00 deadline, by design, prior to this entry (already
+recorded above and on the board row `release-gate-decisions-pending` sub-item
+(d)). Deleted the watcher scripts/logs matching `gpu0_cutover*`,
+`timing_gpu0_watch*`, `time_rollout_gpu0.py` (+ its `__pycache__` artifact)
+from `scratch/`; the board row's own quoted evidence is the durable record.
+Left `scratch/time_rollout.py`, `scratch/timing_run.log`,
+`scratch/timing_results.json`, `scratch/timing_gpu0_stdout.log` untouched --
+not named in the cleanup instruction, not confirmed dead.
+
+Branch reap check (`git branch -a` + `git ls-remote --heads origin` after
+`fetch --prune`): `worktree-agent-*`, `board-verify-20261008`, `chore/*`,
+`paper-parity-gate`, `rollout/fast-path`, `iris-vermeulen/measurement-table-regen`,
+`test-suite-measure-wt` -- none exist locally or on origin; already reaped in
+an earlier pass this campaign. `origin/m1-retrain-status-wip` also already
+gone (`git ls-remote` empty) -- deleted earlier this session per
+zofia-kaminska's explicit "superseded, safe to delete" verdict, which predates
+and satisfies the coordinator's "waits for Zofia" instruction; no further
+action needed, flagging the discrepancy here rather than silently dropping it.
