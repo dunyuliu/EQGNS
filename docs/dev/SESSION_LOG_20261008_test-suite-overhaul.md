@@ -92,7 +92,7 @@ Control socket verified live before any action; no MFA prompts/issues. Venv buil
 `torch_scatter`/`torch_sparse`/`torch_cluster`/`pyg_lib` in `gns/`/`meshnet/` (PyG's pure-
 PyTorch scatter fallback covers it), so the source-build contingency was not needed; this is
 an unverified claim until the correctness gate actually runs and passes (not yet run —
-pulling M1/M2 data from the paper's own Zenodo archive directly on Vista's network instead of
+pulling M1/M2 data from the paper's own Zenodo archive directly on the cluster's network instead of
 transferring 19GB through the SSH socket, download still in progress). No Slurm job submitted
 yet; account is already at its own 20/20 running-job QOS cap plus 4 pending (unrelated to
 cluster load). EAR26006 has 7320 SUs available; EAR26005 untouched, confirmed. Treating this
@@ -473,7 +473,7 @@ zofia dispatch put 3 specialists live simultaneously -- a breach of my own
 board-only, but recording the near-miss: must `ListAgents`-count before every
 dispatch, not just before parallel pairs I intentionally launched together.
 
-## Mira-volkov (GH200/Vista, adfdb3795d3569fab) -- interim, ~1h40m in, no gate result yet
+## Mira-volkov (GH200 (TACC), adfdb3795d3569fab) -- interim, ~1h40m in, no gate result yet
 
 Job 1059662 (gh partition) was cancelled -- queuing behind this account's own
 20 running `gh` jobs (QOSMaxJobsPerUserLimit). Resubmitted as job 1059676 on
@@ -590,7 +590,7 @@ mira's full report lands.
 
 ## Mira-volkov FINAL report (adfdb3795d3569fab) -- stopped, mission complete
 
-Verification caveat: I hold no Vista/GH200 SSH credential myself, so gate axis
+Verification caveat: I hold no GH200 SSH credential myself, so gate axis
 3 (my own fresh oracle re-run) is not possible for this hardware from my seat.
 Accepting this report on the strength of its specificity and self-flagged
 caveats (exact job IDs/durations/trajectory counts, a direct import-trace root
