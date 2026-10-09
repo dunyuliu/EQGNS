@@ -13,6 +13,9 @@ M3 model-2700000.pt).
   gate.py extract [CASE ...]    rebuild published.json from the published rollouts
   gate.py falsify M1_D1         planted regression (weights x1.005) must FAIL
   gate.py quick                 ~3 min: one sensitive trajectory per model, 300 steps
+  gate.py run/falsify --rollout-batch-size N   N>1: rollout_batched() path, gated at the
+                                 looser REL_TOL_BATCHED instead of REL_TOL (see its docstring;
+                                 N=1, the default, is bit-identical to omitting this flag)
   gate.py fast [CASE ...]       opt-in --rollout_fast path: full test sets within the FAST_* band
   (fast takes --precision; add --falsify for its planted regression, which must FAIL)
   (add --quick to reference/falsify for the quick-tier variant)
@@ -67,6 +70,44 @@ QUICK = {"M1_D1": 4, "M2_D3": 14, "M3_D3": 7}
 QUICK_STEPS = 300
 KEYS = ["mse_vx", "rt_rmse", "missed", "false"]
 REL_TOL = 1e-4          # current vs published code: float reassociation only
+# Batched rollout (`--rollout_batch_size` > 1, `rollout_batched()` in
+# meshnet/train.py) concatenates multiple trajectories into one disjoint
+# graph before PyTorch's aggr='add' message aggregation, changing summation
+# order vs. the per-trajectory unbatched loop -- same math, different
+# rounding, amplified by the 754-step autoregressive rollout on chaotic
+# trajectories (PATHWAY_FORWARD.md board row `rollout-batched-oracle-gap`,
+# diagnosed BENIGN FLOAT REASSOCIATION by code audit, not a code bug; owner
+# decision `release-gate-decisions-pending` item (3), 2026-10-09: "accept a
+# looser tolerance for the batched path only (default batch=1 path keeps
+# 1e-4)"). The default/eager batch=1 path above is UNCHANGED.
+#
+# Measured 2026-10-09 (iris-vermeulen), batch=15, all 8 gated cases
+# (M1_D1/M1_small/M1_large/M2_D2/M2_D3/M2_checkerboard/M3_D3/M3_D1hypo) vs
+# `reference.json` (or `published_reference()` for M1_large): worst-case
+# relative delta among trajectories NOT already excluded elsewhere as known
+# chaotic bifurcations (`regression_ok()`'s REGRESSION_EXCLUDE_* -- M2_D3
+# entirely, M3_D3 traj 7) was M3_D3 traj 8 at 0.0413 (mse_vx 0.857->0.816);
+# M1_D1 traj 4 (the originally-diagnosed trajectory) measured 0.0309 (mse_vx
+# 1.15026->1.18577, matching the board row's reported ~0.0355 absolute
+# delta). REL_TOL_BATCHED = 2x that worst-case (0.0826), rounded up to the
+# next power of ten -> 1e-1. This does NOT cover two outliers found during
+# this same measurement pass, deliberately left UNCOVERED (not silently
+# folded into a looser blanket number) because their magnitude is
+# inconsistent with benign reassociation:
+#   - M2_D3 (all trajectories, up to 155x relative delta on `missed`) and
+#     M3_D3 traj 7 (0.737x) are the SAME pre-existing chaotic-bifurcation
+#     cases already excluded from `regression_ok()` for an unrelated gate --
+#     consistent with known behavior, not a new finding, but gate.py run's
+#     compare() has no exclusion mechanism, so they legitimately still FAIL
+#     at batch=15 even under REL_TOL_BATCHED. Reported, not gated around.
+#   - M2_checkerboard traj 1 (8.82x, mse_vx 0.568->9.39) is a NEW finding:
+#     its own eager-vs-eager noise floor (independently measured the same
+#     session) is <1% (0.562-0.568 across two runs), so this is NOT ordinary
+#     chaotic/eager noise and does not fit the benign-reassociation story --
+#     flagged for `lars-eriksson` (audit) / the owner, not folded into this
+#     tolerance and not silently excluded.
+# See tests/paper_parity/README.md for the full measurement table.
+REL_TOL_BATCHED = 1e-1
 COLLAPSE_TOL = 0.5      # var(pred)/var(gt) below this: flat/degenerate forecast (owner-set, do not tune)
 # fast tier (--rollout_fast): rounding differs from the default path and the chaotic rollout
 # amplifies it, so no per-trajectory match; per case, vs reference.json, the mean rt_rmse, the
@@ -335,19 +376,27 @@ def parallel(fn, cases, gpus):
         return dict(zip(cases, ex.map(task, cases)))
 
 
-def cmd_run(cases, gpus, quick=False):
+def cmd_run(cases, gpus, quick=False, batch_size=1):
+    """batch_size=1 (default): unbatched rollout() path, gated at REL_TOL
+    (unchanged). batch_size>1: rollout_batched() path (--rollout_batch_size),
+    gated at the looser REL_TOL_BATCHED (see its definition above) --
+    PATHWAY_FORWARD.md `rollout-batched-oracle-gap`."""
+    extra = (f"--rollout_batch_size={batch_size}",) if batch_size > 1 else ()
+    rel_tol = REL_TOL_BATCHED if batch_size > 1 else REL_TOL
     reference = load(REFERENCE)
     truncated = {c: published_reference(c) for c in cases if c in TRUNCATE_TO_PUBLISHED}
     t0 = time.time()
     rollouts = parallel(
         lambda c, g: fresh_rollout(c, g, quick=quick,
-                                    n_overrides=truncated[c][1] if c in truncated else None),
+                                    n_overrides=truncated[c][1] if c in truncated else None,
+                                    extra=extra),
         cases, gpus)
-    print(f"rollouts: {len(cases)} cases on GPUs {gpus} in {time.time() - t0:.0f} s")
+    print(f"rollouts: {len(cases)} cases on GPUs {gpus} in {time.time() - t0:.0f} s"
+          + (f" (batch_size={batch_size}, rel_tol={rel_tol})" if batch_size > 1 else ""))
     results = {}
     for c in cases:
         ref_rows = truncated[c][0] if c in truncated else reference[ref_key(c, quick)]
-        results[c] = compare(c, rollouts[c], ref_rows)
+        results[c] = compare(c, rollouts[c], ref_rows, rel_tol=rel_tol)
     for c, ok in results.items():
         print(f"{c}: {'PASS' if ok else 'FAIL'}")
     return all(results.values())
@@ -399,17 +448,22 @@ def scaled_model(case, tmp, scale):
     return tmp
 
 
-def cmd_falsify(case, cuda, scale=1.005, quick=False):
-    """Scale every weight by `scale`; the gate must FAIL on the result."""
+def cmd_falsify(case, cuda, scale=1.005, quick=False, batch_size=1):
+    """Scale every weight by `scale`; the gate must FAIL on the result.
+    batch_size>1: acceptance check for REL_TOL_BATCHED (see its docstring) --
+    the planted regression must still FAIL under the looser tolerance."""
+    extra = (f"--rollout_batch_size={batch_size}",) if batch_size > 1 else ()
+    rel_tol = REL_TOL_BATCHED if batch_size > 1 else REL_TOL
     if case in TRUNCATE_TO_PUBLISHED:
         ref_rows, n_overrides = published_reference(case)
     else:
         ref_rows, n_overrides = load(REFERENCE)[ref_key(case, quick)], None
     with tempfile.TemporaryDirectory() as tmp:
         model_dir = scaled_model(case, Path(tmp), scale)
-        current = fresh_rollout(case, cuda, model_dir, quick=quick, n_overrides=n_overrides)
-    caught = not compare(case, current, ref_rows, quiet=True)
-    print(f"planted regression (weights x{scale}) {'CAUGHT' if caught else 'MISSED'}")
+        current = fresh_rollout(case, cuda, model_dir, quick=quick, n_overrides=n_overrides, extra=extra)
+    caught = not compare(case, current, ref_rows, rel_tol=rel_tol, quiet=True)
+    print(f"planted regression (weights x{scale}{f', batch_size={batch_size}' if batch_size > 1 else ''}) "
+          f"{'CAUGHT' if caught else 'MISSED'}")
     return caught
 
 
@@ -483,6 +537,10 @@ def main():
     ap.add_argument("--falsify", action="store_true", help="fast/regression tier: planted regression must FAIL")
     ap.add_argument("--tier", default="default", choices=["default", "tight"],
                      help="regression tier: default=4dt/0.03, tight=3dt/0.02 (owner decision (a) fallback)")
+    ap.add_argument("--rollout-batch-size", type=int, default=1, dest="rollout_batch_size",
+                     help="run/falsify only: >1 drives rollout_batched() via --rollout_batch_size "
+                          "and gates at REL_TOL_BATCHED instead of REL_TOL (default 1: unbatched "
+                          "rollout(), REL_TOL, unchanged)")
     a = ap.parse_args()
     gpus = [int(g) for g in a.cuda.split(",")]
     quick = a.quick or a.command == "quick"
@@ -513,7 +571,7 @@ def main():
                   f"'gate.py run {c}', see TRUNCATE_TO_PUBLISHED) -- skipping")
         cases = [c for c in cases if c not in TRUNCATE_TO_PUBLISHED]
     if a.command in ("run", "quick"):
-        sys.exit(0 if cmd_run(cases, gpus, quick) else 1)
+        sys.exit(0 if cmd_run(cases, gpus, quick, batch_size=a.rollout_batch_size) else 1)
     if a.command == "fast":
         sys.exit(0 if cmd_fast(cases, gpus, a.precision, a.falsify) else 1)
     if a.command == "regression":
@@ -525,7 +583,8 @@ def main():
     if a.command == "paper":
         cmd_paper(cases)
     if a.command == "falsify":
-        sys.exit(0 if all(cmd_falsify(c, gpus[0], quick=quick) for c in cases) else 1)
+        sys.exit(0 if all(cmd_falsify(c, gpus[0], quick=quick, batch_size=a.rollout_batch_size)
+                           for c in cases) else 1)
 
 
 if __name__ == "__main__":

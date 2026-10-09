@@ -38,6 +38,53 @@ bit-identical.
 If the GPU, CUDA or torch version changes, regenerate `reference.json`: it
 comes from the paper's own code, so regenerating it is safe.
 
+## Batched rollout (`rollout_batched()`, `--rollout-batch-size`)
+
+```bash
+python3 tests/paper_parity/gate.py run --rollout-batch-size 15 --cuda 1              # all 8 cases, looser tolerance
+python3 tests/paper_parity/gate.py falsify M1_D1 --rollout-batch-size 15 --cuda 1     # planted x1.005 regression must FAIL
+```
+
+`--rollout-batch-size` (default 1: today's unbatched `rollout()`, `REL_TOL`
+unchanged) drives `rollout_batched()`, which concatenates multiple
+trajectories into one disjoint graph before PyTorch's `aggr='add'` message
+aggregation -- same math as the per-trajectory loop, different summation
+order, amplified by the 754-step autoregressive rollout on chaotic
+trajectories. Diagnosed BENIGN FLOAT REASSOCIATION by code audit (not a code
+bug), PATHWAY_FORWARD.md board row `rollout-batched-oracle-gap`. Owner
+decision (`release-gate-decisions-pending` item (3), 2026-10-09): accept a
+looser tolerance for the batched path only; the default batch=1 path keeps
+`REL_TOL=1e-4`.
+
+`REL_TOL_BATCHED = 1e-1` (`gate.py`), batch_size>1 only. Set from a fresh
+measurement (2026-10-09, batch=15, all 8 gated cases vs `reference.json` /
+the M1_large published-rollout reference): worst-case relative delta among
+trajectories *not* already excluded elsewhere as known chaotic bifurcations
+(same cases `regression_ok()` already excludes for an unrelated gate --
+`M2_D3` entirely, `M3_D3` traj 7) was M3_D3 traj 8 at 0.0413; the
+originally-diagnosed M1_D1 traj 4 measured 0.0309. `REL_TOL_BATCHED` = 2x
+that worst-case, rounded up to the next power of ten (0.0826 -> 1e-1).
+Falsify acceptance check (weights x1.005, M1_D1, batch=15): CAUGHT at this
+tolerance, 4/6 trajectories FAIL by a wide margin (e.g. missed 0->54, mse_vx
+1.150->0.810) -- no tightening needed.
+
+**`gate.py run --rollout-batch-size 15` is deliberately not all-green even
+after this fix** -- two categories of trajectory legitimately still FAIL,
+on purpose, because `compare()` has no exclusion mechanism and their
+divergence does not fit the benign-reassociation story folded into
+`REL_TOL_BATCHED`:
+  - `M2_D3` (all trajectories, up to 155x relative delta on `missed`) and
+    `M3_D3` traj 7 (0.737x): the same pre-existing chaotic-bifurcation cases
+    already excluded from `regression_ok()` elsewhere -- consistent with
+    known behavior, not new, reported here rather than silently gated around.
+  - `M2_checkerboard` traj 1 (mse_vx 0.568->9.39, 8.8x): a **new finding**,
+    measured 2026-10-09. Its own eager-vs-eager noise floor (independently
+    measured the same session, two non-deterministic runs) is under 1%
+    (0.562-0.568), so this divergence is NOT ordinary chaotic/eager noise and
+    does not fit the benign-reassociation story that motivates
+    `REL_TOL_BATCHED`. Flagged for audit (`lars-eriksson`) / the owner, not
+    folded into this tolerance and not silently excluded from the gate.
+
 ## Cases
 
 | Case | Model | Test set |
