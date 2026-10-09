@@ -160,8 +160,10 @@ values, included to show the wall-clock the slope was built from:
 | `--rollout_fast tf32`, batch 1 | 2.65 | 13.4 / 11.4 |
 | `--rollout_fast tf32`, batch 15 | 3.0 | 47.8 / 16.5 (15 traj) |
 
-Rep 0 of every fast-path config is slower than reps 1-2 (10-14 ms vs 2.4-7.4 ms) — compile
-warm-up, consistent with the fixed-startup point above.
+Rep 0 of every fast-path config is slower than reps 1-2: about 2-4x at batch 1 (10.5-14.2 vs
+2.45-7.4 ms) and about 10-15% at batch 15 (3.40-5.39 vs 2.88-4.93 ms) — compile warm-up,
+consistent with the fixed-startup point above; the warm-up cost is amortized over more work
+per call at batch 15.
 
 **Gap isolation** (`paper_stack*.log/.json`): every variant of the *published* code lands at
 the same ~22 ms/step regardless of what's changed, so none of these explain the gap to paper
@@ -193,9 +195,10 @@ as reported, unaudited until re-derived):
 
 The published rollout loop (`train.py.published`, and the same lines in the Zenodo copy)
 calls `predict_acceleration` purely to log an `acc_loss` metric — that call does not feed back
-into the trajectory. Dropping it (one forward pass instead of two) lands at ~11 ms/step, which
-matches both paper Table 6's quoted ~11 ms at 200 m and this repo's current default path
-(11.3 ms/step, table above). **Unresolved, stated as such**: whether Table 6 was timed on a
+into the trajectory. This was not independently re-measured with the call removed; arithmetically,
+profile sum minus `predict_acceleration` (21.2 - 10.02 ~ 11.2 ms/step) is consistent with this
+repo's current default path (11.3 ms/step, table above) and with paper Table 6's quoted ~11 ms
+at 200 m. **Unresolved, stated as such**: whether Table 6 was timed on a
 code version that never had the second (loss-only) pass, or whether the original measurement
 counted only the prediction call. The owner states the paper's number came from the published
 code, read off `tqdm`'s it/s; we cannot independently confirm which code path tqdm was wrapping
