@@ -70,6 +70,16 @@ def pytest_configure(config):
                    "lr_init perturbed +10% must make the convergence_gate_nightly comparison FAIL "
                    "(needs data/gns-sample/, skips if absent); run explicitly, not part of "
                    "`-m convergence_gate_nightly`")
+    config.addinivalue_line(
+        "markers", "training_gate: test-suite-overhaul sub-item (2) -- current meshnet/train.py's "
+                   "train() vs the frozen oracle meshnet/train.py.published, ~1000 steps on real M1 "
+                   "D1 data, per-step loss vs a reference generated from the oracle itself (needs "
+                   "data/gns-sample/ and a free CUDA device, skips if absent)")
+    config.addinivalue_line(
+        "markers", "training_gate_falsify: self-verifying mutation check for training_gate -- "
+                   "lr_init perturbed +10% must make the current-vs-published-oracle comparison "
+                   "FAIL (needs data/gns-sample/ and a free CUDA device, skips if absent); run "
+                   "explicitly, not part of `-m training_gate`")
 
 
 def pytest_addoption(parser):
