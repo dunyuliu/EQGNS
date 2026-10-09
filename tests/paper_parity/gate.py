@@ -22,11 +22,21 @@ M3 model-2700000.pt).
 
 All rollouts run in torch deterministic mode (det_rollout.py), which makes
 reruns bit-identical; GPU nondeterminism otherwise swings chaotic
-trajectories by >100% in MSE. Metrics per trajectory: rollout MSE of vx, and
+trajectories by >100% in MSE. Metrics per trajectory: rollout MSE of vx,
 rupture-time RMSE / missed / false node counts at 0.1 m/s
-(scripts/utils/plot.rupture.dynamics.py), over the unpadded steps (see valid_steps).
+(scripts/utils/plot.rupture.dynamics.py), Mw error, slip-rate RMSE (vx and
+vy components), and final-slip RMSE, over the unpadded steps (see
+valid_steps). Mw / slip-rate / final-slip reuse the same seismic-moment and
+rupture-analysis conventions as measure_vs_published.py (PROJECT_RULES.md
+rule 7): `compute_moment()` loaded by path from
+scripts/utils/plot.rupture.dynamics.py (not importable as a dotted module
+name), `Mw = (2/3) * (log10(moment) - 9.1)`, and the window is always
+`valid_steps(pkl)` (or `n_override` for TRUNCATE_TO_PUBLISHED cases) --
+never a hardcoded step count, so each case's own per-case window (e.g.
+M1_D1's 755 steps / 0-754) is honored automatically instead of assumed.
 """
 import argparse
+import importlib.util
 import os
 import queue
 from concurrent.futures import ThreadPoolExecutor
@@ -39,6 +49,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import matplotlib.tri as mtri
 import numpy as np
 import torch
 
@@ -47,6 +58,18 @@ REPO = HERE.parents[1]
 DATA = REPO / "data" / "gns-sample"
 PUBLISHED = HERE / "published.json"   # metrics of the published rollout files
 REFERENCE = HERE / "reference.json"   # metrics of train.py.published, deterministic
+
+# scripts/utils/plot.rupture.dynamics.py is not an importable dotted module
+# name (literal dots in the filename) -- loaded by path, same technique as
+# measure_vs_published.py's own `prd` (PROJECT_RULES.md rule 7: reuse
+# compute_moment()/the Mw formula, don't redefine them; this is a second,
+# independent module-load of the same file, not a redefinition -- gate.py
+# cannot import measure_vs_published.py here, since that module imports
+# gate.py at its own top level and doing so the other way would be circular).
+_PRD_PATH = REPO / "scripts" / "utils" / "plot.rupture.dynamics.py"
+_prd_spec = importlib.util.spec_from_file_location("plot_rupture_dynamics_gate", _PRD_PATH)
+prd = importlib.util.module_from_spec(_prd_spec)
+_prd_spec.loader.exec_module(prd)  # only used for compute_moment(); no __main__ side effects
 
 # Regenerated (bug-fixed) datasets that are too large / too actively-updated
 # to live under gns-sample (published, read-only, fixture-sized) still need
@@ -68,7 +91,7 @@ UNREACHED = 1000.0
 # quick tier: the trajectory per model most sensitive to perturbation, truncated
 QUICK = {"M1_D1": 4, "M2_D3": 14, "M3_D3": 7}
 QUICK_STEPS = 300
-KEYS = ["mse_vx", "rt_rmse", "missed", "false"]
+KEYS = ["mse_vx", "rt_rmse", "missed", "false", "mw_error", "sr_rmse_vx", "sr_rmse_vy", "final_slip_rmse"]
 REL_TOL = 1e-4          # current vs published code: float reassociation only
 # Batched rollout (`--rollout_batch_size` > 1, `rollout_batched()` in
 # meshnet/train.py) concatenates multiple trajectories into one disjoint
@@ -209,8 +232,10 @@ def metrics(pkl, n_override=None):
     pred = np.asarray(pkl["predicted_rollout"], dtype=np.float64)[:n]
     gt = np.asarray(pkl["ground_truth_rollout"], dtype=np.float64)[:n]
     init = np.asarray(pkl["initial_velocities"], dtype=np.float64)
-    rt_gt = rupture_time(np.linalg.norm(np.concatenate([init, gt]), axis=-1))
-    rt_pr = rupture_time(np.linalg.norm(np.concatenate([init, pred]), axis=-1))
+    speed_gt = np.linalg.norm(np.concatenate([init, gt]), axis=-1)
+    speed_pr = np.linalg.norm(np.concatenate([init, pred]), axis=-1)
+    rt_gt = rupture_time(speed_gt)
+    rt_pr = rupture_time(speed_pr)
     hit_gt, hit_pr = rt_gt < UNREACHED, rt_pr < UNREACHED
     both = hit_gt & hit_pr
     # Collapse guard (owner, citing dynamo_gns Rule 22 cl.7-8): a model that
@@ -231,11 +256,59 @@ def metrics(pkl, n_override=None):
         ratio_ch = np.where(var_gt > 0, var_pred / np.where(var_gt > 0, var_gt, 1.0),
                              np.where(var_pred > 0, np.inf, 1.0))
     var_ratio = float(np.min(ratio_ch))
+
+    # Mw error: seismic moment / moment-magnitude of this trajectory's own
+    # ground truth vs its own prediction (same role as rt_rmse above -- a
+    # per-trajectory accuracy number computed from gt/pred, then diffed
+    # current-vs-reference by compare()). Convention: compute_moment()
+    # (scripts/utils/plot.rupture.dynamics.py, shear_modulus=32e9,
+    # slip_threshold=0.01 defaults) on the SPEED magnitude time series
+    # (`speed_gt`/`speed_pr`, init frame prepended -- same series rt_gt/rt_pr
+    # were built from, not a raw vx/vy component), Mw = (2/3)*(log10(M0)-9.1)
+    # (both reused verbatim from measure_vs_published.py's compare_pair(),
+    # PROJECT_RULES.md rule 7). A non-positive moment means compute_moment()
+    # found no node with cumulative slip above its threshold -- i.e. this
+    # trajectory never actually ruptured, which is a data problem (every
+    # CASES entry is a real earthquake rollout and should rupture), not a
+    # tolerance question -- raised loudly rather than papered over with a
+    # sentinel value nobody asked for.
+    node_coords0 = np.asarray(pkl["node_coords"])[0]
+    triang = mtri.Triangulation(node_coords0[:, 0] / 1e3, node_coords0[:, 1] / 1e3)
+    moment_gt = prd.compute_moment(speed_gt, triang, DT)
+    moment_pr = prd.compute_moment(speed_pr, triang, DT)
+    if moment_gt <= 0 or moment_pr <= 0:
+        raise RuntimeError(
+            f"compute_moment() returned a non-positive seismic moment (gt={moment_gt:.3g}, "
+            f"pred={moment_pr:.3g}) -- no node crossed the slip_threshold, so Mw is undefined; "
+            "this is a genuinely degenerate trajectory, not a tolerance issue")
+    mw_gt = (2.0 / 3.0) * (np.log10(moment_gt) - 9.1)
+    mw_pr = (2.0 / 3.0) * (np.log10(moment_pr) - 9.1)
+
+    # Slip-rate RMSE, both velocity components, over the same valid window
+    # as everything else above (n / n_override) -- NOT a hardcoded 0-754:
+    # that window is simply what valid_steps() returns for M1_D1 and its
+    # 755-step cohort (see module docstring / valid_steps()).
+    sr_rmse_vx = float(np.sqrt(np.mean((pred[..., 0] - gt[..., 0]) ** 2)))
+    sr_rmse_vy = float(np.sqrt(np.mean((pred[..., 1] - gt[..., 1]) ** 2)))
+
+    # Final-slip RMSE: per-node cumulative slip (trapezoidal integral of the
+    # speed magnitude over the full init+window time series, same
+    # integration compute_moment() itself does internally for its own
+    # cumulative_slip), RMSE across nodes between prediction and ground
+    # truth.
+    final_slip_gt = np.trapezoid(speed_gt, dx=DT, axis=0)
+    final_slip_pr = np.trapezoid(speed_pr, dx=DT, axis=0)
+    final_slip_rmse = float(np.sqrt(np.mean((final_slip_pr - final_slip_gt) ** 2)))
+
     return {
         "mse_vx": float(np.mean((pred[..., 0] - gt[..., 0]) ** 2)),
         "rt_rmse": float(np.sqrt(np.mean((rt_gt[both] - rt_pr[both]) ** 2))) if both.any() else 0.0,
         "missed": int(np.sum(hit_gt & ~hit_pr)),
         "false": int(np.sum(~hit_gt & hit_pr)),
+        "mw_error": float(abs(mw_pr - mw_gt)),
+        "sr_rmse_vx": sr_rmse_vx,
+        "sr_rmse_vy": sr_rmse_vy,
+        "final_slip_rmse": final_slip_rmse,
         "var_ratio": var_ratio,
         "collapsed": bool(var_ratio < COLLAPSE_TOL),
     }
@@ -323,8 +396,12 @@ def published_reference(case):
 def compare(case, current, ref, rel_tol=REL_TOL, quiet=False):
     ok = len(current) == len(ref)
     for i, (cur, r) in enumerate(zip(current, ref)):
+        # `not (delta <= bound)` -- not `delta > bound` -- so a NaN in cur[k]
+        # (e.g. a metric that silently produced NaN instead of raising) FAILS
+        # the gate instead of comparing False against every bound and
+        # passing (code discipline: a tolerance gate must fail on NaN).
         bad = [f"{k} {r[k]:.6g}->{cur[k]:.6g}" for k in KEYS
-               if abs(cur[k] - r[k]) > rel_tol * max(abs(r[k]), 1.0)]
+               if not (abs(cur[k] - r[k]) <= rel_tol * max(abs(r[k]), 1.0))]
         if cur.get("collapsed"):
             bad.append(f"collapsed var_ratio={cur['var_ratio']:.3g} < {COLLAPSE_TOL}")
         ok &= not bad
