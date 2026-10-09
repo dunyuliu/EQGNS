@@ -52,32 +52,22 @@ Raw per-trajectory JSON for every (label, step): `eq_rupture_gns_data/m1_retrain
 
 ## Interpretation — effect is directionally present but NOT resolved at N=3
 
-`median mse_vx` favors the fixed-D1 arm at 4 of 5 matched steps (200k,
-300k, 400k, 500k); only 100k favors the control, and that's driven by a
-single outlier (fixed seed1 = 85.7, ~9-40x every other cell in the table).
-`rt_rmse` shows the same modest lean toward fixed at the later steps
-(300k-500k) and is roughly tied or slightly favors control at 100k-200k.
+`median mse_vx` favors the fixed-D1 arm at 4 of 5 matched steps (200k-500k);
+only 100k favors the control, driven by a single outlier (fixed seed1 =
+85.7, ~9-40x every other cell). `rt_rmse` leans the same way at 300k-500k
+and is roughly tied at 100k-200k.
 
-**This is not a resolved result.** Within-arm seed spread is enormous — up
-to ~30x at a single step (old@200k: 1.60 to 23.7; fixed@300k: 0.99 to
-23.5) — larger than the between-arm median gap at several steps. With only
-3 seeds per arm, a single outlier run swings the arm median by an order of
-magnitude (as it does at 100k). CycleGNS's seed-spread rule (Rule 25, cited
-when this budget was set) exists for exactly this: a result that holds for
-one seed and not another is not a result, and the same caution applies
-here to "N=3 medians."
+**Not a resolved result.** Within-arm seed spread reaches ~30x at a single
+step (old@200k: 1.60-23.7; fixed@300k: 0.99-23.5) — larger than the
+between-arm gap at several steps. At N=3, one outlier swings the arm median
+by an order of magnitude (as at 100k); a result holding for one seed and
+not another is not a result. The data leans toward the bug fix helping,
+consistent with the mechanism (the old data's zero-tail frames are
+degenerate training targets — literally zero velocity/position-delta signal
+for 72 of 827 frames per trajectory), but resolving it needs more seeds
+than this budget covered — a question for a future session, not decided
+here. No confirmed-effect claim is made.
 
-**No README claim of a confirmed effect is being made.** The data leans
-toward the bug fix helping, consistent with the mechanism (the old data's
-zero-tail frames are degenerate training targets — literally zero
-velocity/position-delta signal for 72 of 827 frames per trajectory, which
-can only ever teach the model a wrong, too-easy answer for that portion of
-the rollout), but resolving it with confidence needs more seeds than this
-budget covered (owner approved N=3 specifically to fit the ~48h-ish
-wall-clock ask this session; a larger N is a budget question for a future
-session, not something to decide unilaterally here).
-
-**One collapse-guard flag**: `old_seed2` at step 100,000 has 1 of 6
-trajectories flagged `collapsed` (`var_ratio < 0.5`) — noted, not
-suppressed; does not change the overall picture (that arm's median mse_vx
-at that step is still unremarkable, 1.65).
+One collapse-guard flag: `old_seed2` at step 100,000 has 1 of 6 trajectories
+flagged `collapsed` (`var_ratio < 0.5`) — noted, not suppressed; does not
+change that arm's median mse_vx at that step (1.65, unremarkable).
