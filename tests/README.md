@@ -115,6 +115,33 @@ auto-skip (`fixtures/training_golden/common.py::require_d1_dataset`, no
 `--paper-parity` flag too; these two don't, since there is no risk of an
 expensive real-data run happening by accident where the data doesn't exist.
 
+**Strict mode:** `pytest -m training_golden` (or `-m
+convergence_gate_nightly`) exits 0 when every selected test is skipped, so
+a moved/renamed/missing dataset path would silently "pass" a context that
+expects the data to be checked out (e.g. a future nightly job on a machine
+provisioned specifically to run these tiers). Set
+`EQGNS_TRAINING_GUARD_REQUIRE_DATA=1` to turn that skip into a hard,
+reported FAILURE instead:
+
+```bash
+EQGNS_TRAINING_GUARD_REQUIRE_DATA=1 pytest tests/ -m training_golden -q
+```
+
+**Falsify checks** (`tests/test_training_golden_falsify.py`,
+`tests/test_convergence_gate_nightly_falsify.py`, markers
+`training_golden_falsify` / `convergence_gate_nightly_falsify`): re-run the
+respective pipeline with `lr_init` perturbed +10% and assert the golden/band
+comparison FAILS -- the self-verifying, committed counterpart to
+`tests/paper_parity/gate.py falsify`, so the "this oracle is sensitive to
+real regressions" claim does not rest on a commit message alone. Not part of
+`-m training_golden` / `-m convergence_gate_nightly` (same separation as
+`gate.py run` vs `gate.py falsify`) -- run explicitly:
+
+```bash
+pytest tests/ -m training_golden_falsify -q
+pytest tests/ -m convergence_gate_nightly_falsify -q
+```
+
 Why two tiers, and why they exist alongside the tiny synthetic e2e golden
 (tier 3) and the A/B determinism test: the synthetic golden proves the
 pipeline runs correctly end-to-end on a model sized for sub-second CI
@@ -152,6 +179,12 @@ itself `"collapsed": true` (near-constant rollout, `var_ratio` well under
 `gate.py`'s `COLLAPSE_TOL`) -- this is an accurate, reproducible description
 of a 30-step model, not a test bug; a meaningfully-converged version of this
 tier needs a much larger step budget (see "Recommended follow-up" below).
+Despite its marker/board name this is therefore a regression-determinism
+golden for an expected-collapsed checkpoint, not a convergence check (see
+the module docstring's HONESTY NOTE) -- it explicitly asserts the current
+run's `collapsed` status matches the reference's recorded one, so a future
+change that makes this checkpoint stop collapsing is reported by name
+rather than silently folded into the metric diff.
 Marked `nightly`/`slow`: not in the fast local loop, not expected to gate
 every PR -- run it explicitly, e.g. in a scheduled nightly job.
 

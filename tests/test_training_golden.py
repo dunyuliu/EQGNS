@@ -22,10 +22,26 @@ This tier's reference IS an oracle: a committed loss curve from one actual
 call of the real training path, at the real model size, on the real data. A
 change to meshnet/train.py's train()/validation() loop, an optimizer
 hyperparameter (lr, decay schedule), a loss-weight constant, or the noise
-injection will perturb at least one logged step's loss and fail this test --
-confirmed by mutation (see the session's conductor report: lr_init perturbed
-10%, test failed with a step-0 train-loss delta of ~0.047 against a 1e-5
-tolerance; reverted, test passed again).
+injection will perturb at least one logged step's loss and fail this test.
+
+Mutation evidence (corrected 2026-10-09, see victor-reyes audit MAJOR 1 --
+the originally-recorded evidence was misreported, not a harness bug): step 0
+is logged from the model's INITIAL weights, BEFORE the first
+`optimizer.step()` (meshnet/train.py's `train()` writes the step-N log line
+after that step's backward+optimizer.step(), but the loop logs the loss
+computed at loop entry -- step 0's forward pass happens before any weight
+update has occurred). `lr_init` therefore CANNOT and does NOT change step 0's
+loss: a hand-run +10% `lr_init` perturbation reproduced the exact same step-0
+train/valid loss, bit-for-bit, as the unperturbed run. The perturbation first
+shows up at step 1 (observed delta ~0.0079 on train_loss against this test's
+1e-5 tolerance) and persists through every later step. The harness IS
+deterministic at step 0 (confirmed, not merely assumed) -- the 1e-5
+tolerance and the golden's exact step-0 values are not flaky, they are just
+insensitive to this particular mutation by construction. See
+tests/test_training_golden_falsify.py (marker `training_golden_falsify`,
+`pytest tests/ -m training_golden_falsify -q`) for a self-verifying,
+committed re-run of this mutation, rather than relying on a commit
+message's numbers.
 
 Runtime: ~130s (CPU-forced single-process; see tests/fixtures/training_golden
 /common.py's CUDA_VISIBLE_DEVICES rationale), dominated by loading the real
@@ -57,11 +73,22 @@ NTRAINING_STEPS = 10
 TOLERANCE = 1e-5
 
 
-def _run_pipeline(tmp_path):
+def _run_pipeline(tmp_path, lr_scale=1.0):
+    """Run tier 1's training pipeline. `lr_scale` != 1.0 perturbs the copied
+    config's lr_init before the run -- a test-only mutation of a fixture
+    COPY in tmp_path, never of tests/fixtures/training_golden/config.json
+    itself -- used by the falsify test below."""
     common.require_d1_dataset()
     model_dir = tmp_path / "model"
     model_dir.mkdir()
-    shutil.copy(common.CONFIG_SRC, model_dir / "config.json")
+    if lr_scale == 1.0:
+        shutil.copy(common.CONFIG_SRC, model_dir / "config.json")
+    else:
+        with open(common.CONFIG_SRC) as f:
+            cfg = json.load(f)
+        cfg["lr_init"] = cfg["lr_init"] * lr_scale
+        with open(model_dir / "config.json", "w") as f:
+            json.dump(cfg, f)
     common.run_cli([
         "--mode=train",
         f"--data_path={common.D1_DATASET_DIR}/",
