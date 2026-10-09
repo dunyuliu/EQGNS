@@ -190,8 +190,12 @@ where it happens to sit today. The template:
   `README.md`, `CLAUDE.md`)
 - `LICENSE`, `CITATION.cff` (GitHub's citation widget only reads a
   root-level `CITATION.cff`; this file does not move), `.gitignore`,
-  `Dockerfile`, `requirements.txt` (rule 8), and the two environment specs
-  `enviornment.yml` / `gns_env.yml`
+  `requirements.txt` (rule 8), and the two environment specs
+  `enviornment.yml` / `gns_env.yml`. Docker retired 2026-10-09 (owner
+  decision, board row `release-gate-decisions-pending` item (f)): no CI
+  workflow ever built or referenced it (`grep -rl -i docker
+  .github/workflows/` was empty before and after); the root `Dockerfile` is
+  deleted, not relocated.
 - `.github/workflows/` — CI job definitions only. `.circleci/` is retired
   (one CI provider). The community-health files that used to live under
   `.github/` (`AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`,
