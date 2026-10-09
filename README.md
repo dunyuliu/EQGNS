@@ -79,9 +79,8 @@ the user guide:
 
 1. [Data preparation](docs/user/data_preparation.md) — convert EQdyna output to GNS trajectories.
 2. [Training](docs/user/training.md) — direct, single-run, and sweep entry points; `config.json`.
-3. [Rollout and analysis](docs/user/rollout_and_analysis.md) — single and batched inference.
-4. [Batched rollout](docs/user/ROLLOUT_BATCHING.md).
-5. [Inverse problem example](docs/user/example-1.md).
+3. [Rollout and analysis](docs/user/rollout_and_analysis.md) — single, batched (`--rollout_batch_size`), and fast opt-in inference.
+4. [Inverse problem example](docs/user/example-1.md).
 
 ## Reproducing the paper
 

@@ -23,6 +23,7 @@ Report-only (never fails the gate):
 Cheap by design: only `git` subprocess calls, no imports beyond stdlib, no
 training/rollout. Safe to run on a shared, loaded box.
 """
+import re
 import subprocess
 import sys
 
@@ -38,6 +39,9 @@ ROOT_FILES_ALLOWED = {
     "LICENSE",
     "CITATION.cff",  # GitHub's citation widget only reads this at root
     "requirements.txt",
+    # release_notes_vX.Y.Z.md is not listed here: it is a pattern match
+    # (ROOT_FILE_PATTERNS_ALLOWED below), since its filename encodes the
+    # version and changes every release.
 }
 
 # Root-level DIRECTORIES the template places at root. `evals/` and `data/`
@@ -58,10 +62,20 @@ ROOT_DIRS_ALLOWED = {
     "tests",
 }
 
+# Root-level FILE NAME PATTERNS the template allows, for entries whose exact
+# name changes release to release. Exactly one convention lives here today:
+# the CURRENT release note, `release_notes_vX.Y.Z.md` (PROJECT_RULES.md
+# rule 9's docs bullet: ARCHIVED release notes move to docs/dev/; the
+# current one stays at root until the next release archives it there).
+ROOT_FILE_PATTERNS_ALLOWED = (
+    re.compile(r"^release_notes_v\d+\.\d+\.\d+\.md$"),
+)
+
 # Tracked files already over the cap, with a named remediation pending
 # owner sign-off (rewrites a tracked asset's history). Not a path move, and
-# the only exception mechanism this gate carries -- there is no equivalent
-# list for root-entry violations: those fail until moved, full stop.
+# the only exception mechanism for a file's SIZE -- there is no equivalent
+# "pending" list for a root entry's NAME: a name not on the allow-list or
+# matching a pattern above fails until moved, full stop.
 PENDING_LARGE_FILES = {
     "docs/img/meshnet.gif": ("owner-approved", "10.7MB; kept in git as-is, no LFS/external hosting"),
 }
@@ -87,6 +101,7 @@ def check_root_listing():
     out = run(["git", "ls-tree", "--name-only", "-z", "HEAD"])
     entries = [e for e in out.split("\0") if e]
     failures = []
+    pattern_matches = []
     for entry in entries:
         ls = subprocess.run(
             ["git", "ls-tree", "HEAD", entry], capture_output=True, text=True
@@ -99,11 +114,21 @@ def check_root_listing():
                     "(see PROJECT_RULES.md rule 9 for its target)"
                 )
         else:
-            if entry not in ROOT_FILES_ALLOWED:
-                failures.append(
-                    f"root file not on template allow-list: {entry} "
-                    "(see PROJECT_RULES.md rule 9 for its target)"
-                )
+            if entry in ROOT_FILES_ALLOWED:
+                continue
+            if any(p.match(entry) for p in ROOT_FILE_PATTERNS_ALLOWED):
+                pattern_matches.append(entry)
+                continue
+            failures.append(
+                f"root file not on template allow-list: {entry} "
+                "(see PROJECT_RULES.md rule 9 for its target)"
+            )
+    if len(pattern_matches) > 1:
+        failures.append(
+            "more than one release_notes_vX.Y.Z.md at root -- only the "
+            f"CURRENT release's note stays at root, archive the rest to "
+            f"docs/: {sorted(pattern_matches)}"
+        )
     return failures
 
 

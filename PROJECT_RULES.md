@@ -196,6 +196,11 @@ where it happens to sit today. The template:
   workflow ever built or referenced it (`grep -rl -i docker
   .github/workflows/` was empty before and after); the root `Dockerfile` is
   deleted, not relocated.
+- `release_notes_vX.Y.Z.md` — exactly one, the CURRENT release's note, by
+  filename pattern (`scripts/check_root.py`'s `ROOT_FILE_PATTERNS_ALLOWED`,
+  since the exact name changes every release). The next release's first
+  step moves it to `docs/dev/` (where `docs/dev` below says archived
+  release notes live) before writing its own.
 - `.github/workflows/` — CI job definitions only. `.circleci/` is retired
   (one CI provider). The community-health files that used to live under
   `.github/` (`AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`,
