@@ -124,6 +124,92 @@ for small graphs (e.g. the 2D M1-M3 cases below).
    then `runpy.run_module("meshnet.train")` leaves `meshnet/` and checkpoints untouched (rule 1),
    so it stays opt-in and out of the paper-parity gate.
 
+### A100, current code vs the published paper code (2026-10-09)
+
+Owner (2026-10-09, verbatim): "document them faithfully"; and, on what to lead with:
+"in the end, the real run speeds matters." So: end-to-end wall time per real run first,
+per-step slopes and profile as supporting detail. Raw evidence in
+`runs/20261009_a100_timing_published_vs_default/`.
+
+Conditions: one A100-SXM4-40GB (GPU 0), `CUDA_VISIBLE_DEVICES=0`, `OMP_NUM_THREADS=4`
+unless stated, torch 2.6.0+cu124. Host load ~35-42 on 64 cores — **not idle**; the owner
+approved timing under this label for this session only (the standing rule is idle-box-only
+for timing; this is a recorded, explicit exception, not a new default). M1 checkpoint
+`model-3000000.pt` for batch-1 runs; M2 checkpoint for batch-15 runs. 826 vs 100 rollout
+steps, 3 reps; slope = (t_full - t_short) / 726 / n_trajectories.
+
+**End-to-end, one trajectory, 826 steps:** published code ~24.6 s; this repo's current
+default (eager) path ~15.2 s; `--rollout_fast tf32` ~13.4 s. The fast path's end-to-end gain
+over eager is much smaller than its per-step gain (below) because it carries ~11 s of fixed
+startup (compile + CUDA graph capture) vs ~6 s for eager.
+
+**End-to-end, 15 trajectories:** `--rollout_fast tf32` batch 15 ~47.8 s vs this repo's default
+batch 15 ~120.8 s vs an extrapolated (not run) ~15 x 24.6 s = 369 s if the published code were
+run one trajectory at a time.
+
+Per-step slope, median of 3 reps (`timing_matrix.json`); `t_full`/`t_short` are rep 2's own
+values, included to show the wall-clock the slope was built from:
+
+| config | ms / step / traj (median) | t_full / t_short (s) |
+|---|---|---|
+| published code, batch 1 | 22.3 | 24.6 / 8.8 |
+| this repo default (eager), batch 1 | 11.3 | 15.2 / 7.0 |
+| this repo default (eager), batch 15 | 9.3 | 120.8 / 19.1 (15 traj) |
+| `--rollout_fast fp32`, batch 1 | 7.4 | 17.0 / 11.6 |
+| `--rollout_fast fp32`, batch 15 | 4.9 | (not recorded) |
+| `--rollout_fast tf32`, batch 1 | 2.65 | 13.4 / 11.4 |
+| `--rollout_fast tf32`, batch 15 | 3.0 | 47.8 / 16.5 (15 traj) |
+
+Rep 0 of every fast-path config is slower than reps 1-2 (10-14 ms vs 2.4-7.4 ms) — compile
+warm-up, consistent with the fixed-startup point above.
+
+**Gap isolation** (`paper_stack*.log/.json`): every variant of the *published* code lands at
+the same ~22 ms/step regardless of what's changed, so none of these explain the gap to paper
+Table 6's ~11 ms:
+
+| variant | ms/step (median) | tqdm it/s-derived ms/step |
+|---|---|---|
+| this repo's `train.py.published`, torch 2.6 | 22.5 | 21.9 |
+| Zenodo-archived code (record 17095311), torch 2.6 | 22.5 | 21.9 |
+| Zenodo code on the paper's own stack (torch 2.0.0+cu118, PyG 2.3.1, scratch venv since deleted) | 22.4 | 21.8 |
+| same, `OMP_NUM_THREADS` unset | 22.6 | 21.8 |
+| this repo's published code, `OMP_NUM_THREADS` unset | 22.2 | 21.9 |
+
+Ruled out as the cause of the paper-vs-Table-6 gap: code version, software stack, thread
+count, timing method. Note: the paper-stack runs loaded numpy-2-pickled `.npz` through a
+`numpy._core` alias shim for data loading only; this does not affect the timed loop.
+
+**Per-call profile** (`profile_published.py`, M1_D1, 826 steps, first 10 skipped,
+`torch.cuda.synchronize()` around each call; not independently file-logged — numbers below are
+as reported, unaudited until re-derived):
+
+| call | ms / step |
+|---|---|
+| `predict_velocity` | 10.02 |
+| `predict_acceleration` | 10.02 |
+| `datas_to_graph` | 0.40 |
+| transformer | 0.73 |
+| sum | 21.2 |
+
+The published rollout loop (`train.py.published`, and the same lines in the Zenodo copy)
+calls `predict_acceleration` purely to log an `acc_loss` metric — that call does not feed back
+into the trajectory. Dropping it (one forward pass instead of two) lands at ~11 ms/step, which
+matches both paper Table 6's quoted ~11 ms at 200 m and this repo's current default path
+(11.3 ms/step, table above). **Unresolved, stated as such**: whether Table 6 was timed on a
+code version that never had the second (loss-only) pass, or whether the original measurement
+counted only the prediction call. The owner states the paper's number came from the published
+code, read off `tqdm`'s it/s; we cannot independently confirm which code path tqdm was wrapping
+at the time.
+
+**Do not conflate** with the "~1.8-1.9 ms" fast-path figure elsewhere in this doc (2D paper
+models, above): that number is TF32 on an *idle* GPU 1, torch 2.9.1, best-of-3 x 200-step
+loops, on the older `index_add_` aggregation layout. Today's TF32 slope on a *loaded* host
+(this section), whole-run (not best-of-3), current slot-layout aggregation, is 2.45-2.65 ms.
+Both are real measurements of the same opt-in path under different conditions and code
+versions — neither supersedes the other, and this is not a speedup claim over the paper: most
+of the gap to Table 6 is a redundant forward pass in the published loop's loss logging, not a
+`--rollout_fast`-specific win.
+
 ### 2D paper models
 
 Measured 2026-10-08 on the M1-M3 checkpoints (`tests/paper_parity/gate.py` CASES): ~4.7k nodes /
