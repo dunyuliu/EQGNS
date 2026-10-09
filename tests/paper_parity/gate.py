@@ -411,10 +411,30 @@ def main():
     a = ap.parse_args()
     gpus = [int(g) for g in a.cuda.split(",")]
     quick = a.quick or a.command == "quick"
-    cases = a.cases or (list(QUICK) if quick else FAST_CASES if a.command == "fast" else list(CASES))
+    if a.cases:
+        cases = a.cases
+    elif quick:
+        cases = list(QUICK)
+    elif a.command == "fast":
+        cases = FAST_CASES
+    elif a.command == "paper":
+        # M1_large is in TRUNCATE_TO_PUBLISHED: it has no reference.json /
+        # published.json entry (see published_reference() and its docstring),
+        # so it is gated separately inside cmd_run, not here. Default the
+        # "paper" tier to every other case; an explicit ask for M1_large is
+        # handled below (message + skip), not a crash.
+        cases = [c for c in CASES if c not in TRUNCATE_TO_PUBLISHED]
+    else:
+        cases = list(CASES)
     unknown = set(cases) - set(CASES)
     if unknown or (quick and set(cases) - set(QUICK)):
         sys.exit(f"unknown case(s) for this tier: {sorted(set(cases) - set(QUICK if quick else CASES))}")
+    if a.command == "paper":
+        truncated = [c for c in cases if c in TRUNCATE_TO_PUBLISHED]
+        for c in truncated:
+            print(f"[paper] {c}: no reference.json/published.json entry (gated separately via "
+                  f"'gate.py run {c}', see TRUNCATE_TO_PUBLISHED) -- skipping")
+        cases = [c for c in cases if c not in TRUNCATE_TO_PUBLISHED]
     if a.command in ("run", "quick"):
         sys.exit(0 if cmd_run(cases, gpus, quick) else 1)
     if a.command == "fast":
