@@ -78,13 +78,8 @@ Accuracy, full test sets (outcome metrics, `gate.metrics`), against the determin
 | M2_D3 | 0.341 | 0.331, 0.337 | 0.326 | 0.304 | 0.318 | **0.398** |
 | M3_D3 | 0.272 | 0.272, 0.272 | 0.272 | 0.274 | 0.274 | **0.287** |
 
-No trajectory collapsed in any variant. bf16 is the one that leaves the noise floor (+17% on
-M2_D3, +5% on M3_D3); fp16 is as fast and stays inside it. **Use `--rollout_fast fp16`**; tf32
-when fp16 is unavailable.
-
-Gate: `gate.py fast [--precision P]` runs the full M1_D1 / M2_D3 / M3_D3 test sets with the flag,
-deterministically, and requires per-case mean rt_rmse, missed+false and mean mse_vx within
-`FAST_TOL` of the reference, with nothing collapsed; `--falsify` plants the weights x1.005
-regression, which must fail. The default path stays gated by `gate.py run` (flag off, unchanged).
-
-GATE_RESULTS_PLACEHOLDER
+The table above is a pointwise rt_rmse spot-check (small sample), superseded by the full-test-set
+deterministic gate. **Use `--rollout_fast tf32`** (fp32 also passes; fp16 and bf16 fail the gate
+on at least one case) — see `docs/user/rollout_and_analysis.md` for the recommendation and
+`tests/paper_parity/README.md` for the full per-case gate results and `gate.py fast` usage; this
+page is not the place to duplicate them.
