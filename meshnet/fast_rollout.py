@@ -1,4 +1,4 @@
-"""Opt-in fast rollout path (`--rollout_fast`, default off; docs/dev/ROLLOUT_SPEED.md).
+"""Opt-in fast rollout path (`--rollout_fast`, default off; docs/user/rollout_and_analysis.md).
 
 Same math as `MeshSimulator.predict_velocity` + `gns.graph_network.EncodeProcessDecode` on the
 static rollout graph, restructured for inference:
