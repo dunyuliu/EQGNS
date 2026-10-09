@@ -17,6 +17,7 @@ maintenance + new-experiment mode.
 7. Rupture-analysis conventions are stated explicitly
 8. One `requirements.txt`, every entry pinned with `==`
 9. A curated root — the template is the target, not the status quo
+10. Paper-parity gate output accompanies every `meshnet/`/`gns/` PR
 
 ---
 
@@ -261,3 +262,37 @@ in `PENDING_LARGE_FILES` for an oversized tracked file the owner has
 approved to keep (today: `docs/img/meshnet.gif`). A PR adding a new root-level file
 either lands on the allow-list or updates this rule in the same commit — an
 unlisted new entry fails the gate with no exception available.
+
+## 10. Paper-parity gate output accompanies every `meshnet/`/`gns/` PR
+
+Any PR whose diff touches `meshnet/` or `gns/` (the two paper-adjacent
+packages, rule 9) must include, in the PR body, the output of the paper-parity
+gate run fresh on the PR's own branch — not copied from a prior run, not from
+`main`, not from memory. At minimum: `tests/paper_parity/gate.py quick`. A
+change that specifically targets rollout or training behavior additionally
+runs `tests/paper_parity/gate.py run <CASE>` or `tests/paper_parity/gate.py
+regression`, whichever the change exercises, and includes that output too.
+
+This is a convention enforced by PR review, not a CI gate. `.github/workflows/`
+runners on this repo are CPU-only, and the paper-parity gate needs a GPU;
+until a self-hosted GPU runner exists (tracked separately, owner-level infra
+decision, not covered by this rule), no automated check can require this.
+State the gap honestly: a reviewer who does not check can still merge a
+`meshnet/`/`gns/` PR with no gate output at all, and GitHub will not stop
+them. This rule is weaker than a hard required check, and should be replaced
+by one the day a GPU runner exists.
+
+**Rationale**: the paper-parity gate is exactly the check that would catch a
+rollout change silently drifting from `train()`/`validation()` behavior (rule
+1) or a numeric regression in reproduced results — and green CPU-only CI
+proves nothing about it either way. A rule that isn't enforced anywhere is a
+comment; this is enforced at review, since it cannot yet be enforced by
+machine.
+
+**How to apply**: before approving any PR with a diff touching `meshnet/` or
+`gns/`, the reviewer greps the PR body for the gate command's own output
+markers (the `PASS`/`FAIL` lines `gate.py` prints) — not for the string
+"gate.py", which a PR can paste without having run anything. A PR touching
+`meshnet/` or `gns/` with no such output in the body is incomplete and does
+not get approved; raise it as a review comment and wait for an update, don't
+merge-then-follow-up (rule 3).
