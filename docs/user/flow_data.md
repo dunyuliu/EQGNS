@@ -116,6 +116,20 @@ EQGNS adds a `node_property` channel carrying the scalar initial on-fault
 stress per node (see [Data preparation](data_preparation.md)); `pressure` is
 the corresponding upstream fluid-domain feature.
 
+## Example
+
+![mesh](../img/mesh_ex.png)
+*Figure 1. An example mesh. There are time-independent 18 nodes and 10 cells.
+The yellow nodes are inlet nodes (`node_type=4`), red nodes are wall nodes
+(`node_type=6`), blue nodes are normal nodes (`node_type=0`), and green nodes
+(`node_type=5`) are outlet nodes.*
+
+![flow](../img/flow.png)
+*Figure 2. An example of a full upstream fluid-flow simulation on this mesh
+format (not an EQGNS rupture case): velocity-magnitude field at timestep 599
+with an obstacle at x=70, y=40, r=20, colored by the same inlet/outlet/wall/normal
+node types as Figure 1.*
+
 ## Save and load
 Once the python dictionary is ready, the following lines saves the entire dictionary in a compressed format (`.npz`).
 ```python

@@ -72,7 +72,7 @@ COLLAPSE_TOL = 0.5      # var(pred)/var(gt) below this: flat/degenerate forecast
 # amplifies it, so no per-trajectory match; per case, vs reference.json, the mean rt_rmse, the
 # missed+false count and the mean mse_vx may not grow past these factors. Set 2026-10-08 from the
 # run-to-run spread of two nondeterministic eager rollouts (mean rt_rmse <=1.00x, missed+false
-# <=1.52x, mse_vx <=1.15x the reference, over M1_D1/M2_D3/M3_D3; docs/dev/ROLLOUT_SPEED.md).
+# <=1.52x, mse_vx <=1.15x the reference, over M1_D1/M2_D3/M3_D3; docs/user/rollout_and_analysis.md).
 FAST_CASES = ["M1_D1", "M2_D3", "M3_D3"]
 FAST_TOL = {"rt_rmse": 1.05, "missed+false": 2.0, "mse_vx": 1.5}
 
