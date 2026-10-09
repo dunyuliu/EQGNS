@@ -38,15 +38,33 @@ CONFIG_SRC = os.path.join(os.path.dirname(__file__), "config.json")
 SEED = 20260101
 
 
+REQUIRE_DATA_ENV = "EQGNS_TRAINING_GUARD_REQUIRE_DATA"
+
+
 def require_d1_dataset():
-    """Skip (never fail) if the real D1 dataset is not checked out on this
-    machine. 249GB-class, gitignored (PROJECT_RULES.md rule 3); only present
-    on a machine that fetched data/gns-sample/, never in CI."""
-    if not os.path.exists(os.path.join(D1_DATASET_DIR, "train.npz")):
-        pytest.skip(
-            f"real D1 dataset not found at {D1_DATASET_DIR} -- this tier "
-            f"only runs on a machine with data/gns-sample/ checked out "
-            f"(see tests/README.md)")
+    """Skip if the real D1 dataset is not checked out on this machine.
+    249GB-class, gitignored (PROJECT_RULES.md rule 3); only present on a
+    machine that fetched data/gns-sample/, never in CI.
+
+    Strict mode (victor-reyes audit MAJOR 3): `pytest -m training_golden` /
+    `-m convergence_gate_nightly` exits 0 when every selected test is
+    skipped -- so a moved/renamed/missing dataset path would silently
+    "pass" a context that expects the data to be present (e.g. a future
+    nightly job on a machine provisioned specifically to run these tiers).
+    Setting EQGNS_TRAINING_GUARD_REQUIRE_DATA=1 turns the skip into a hard,
+    loud FAILURE instead -- opt in for any invocation that must not succeed
+    by doing nothing (the same shape as tests/paper_parity's explicit
+    `--paper-parity` opt-in, inverted: here the default stays skip-if-absent
+    since routine local/CI runs have no reason to expect the data, but a
+    context that DOES expect it can demand that absence be loud)."""
+    if os.path.exists(os.path.join(D1_DATASET_DIR, "train.npz")):
+        return
+    msg = (f"real D1 dataset not found at {D1_DATASET_DIR} -- this tier "
+           f"only runs on a machine with data/gns-sample/ checked out "
+           f"(see tests/README.md)")
+    if os.environ.get(REQUIRE_DATA_ENV) == "1":
+        pytest.fail(f"{REQUIRE_DATA_ENV}=1 set but {msg}", pytrace=False)
+    pytest.skip(msg)
 
 
 def parse_loss_log(path):

@@ -60,6 +60,16 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "nightly: not required for the fast local loop or the standard CI invocation; run "
                    "explicitly via its own marker (e.g. `pytest tests/ -m convergence_gate_nightly`)")
+    config.addinivalue_line(
+        "markers", "training_golden_falsify: self-verifying mutation check for tier 1 -- lr_init "
+                   "perturbed +10% must make the training_golden comparison FAIL (needs "
+                   "data/gns-sample/, skips if absent); run explicitly, not part of "
+                   "`-m training_golden`")
+    config.addinivalue_line(
+        "markers", "convergence_gate_nightly_falsify: self-verifying mutation check for tier 2 -- "
+                   "lr_init perturbed +10% must make the convergence_gate_nightly comparison FAIL "
+                   "(needs data/gns-sample/, skips if absent); run explicitly, not part of "
+                   "`-m convergence_gate_nightly`")
 
 
 def pytest_addoption(parser):

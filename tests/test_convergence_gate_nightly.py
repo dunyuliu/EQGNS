@@ -2,6 +2,25 @@
 (PATHWAY_FORWARD.md row `training-guard`, and the separate
 `convergence-gate-nightly` board row it folds in).
 
+HONESTY NOTE (victor-reyes audit MAJOR 4, resolved 2026-10-09): despite the
+marker/board name, this is a REGRESSION-DETERMINISM golden for a 30-step,
+EXPECTED-TO-BE-COLLAPSED checkpoint, not a test that the model actually
+converges. gate.py's own `compare()` treats `collapsed` as an automatic FAIL
+(gate.py:253-255, COLLAPSE_TOL=0.5 -- a flat/degenerate forecast); this
+tier's committed reference has `"collapsed": true` by construction (30 steps
+from scratch is nowhere near enough budget for this architecture to escape
+a degenerate forecast -- see "Step/frame budget" below), so a real
+convergence check cannot live at this step count on CPU. This test
+therefore does NOT reuse gate.py's collapse-fails rule; instead (see below)
+it explicitly asserts the CURRENT run's collapse status matches the
+reference's recorded (collapsed) status, so a future change that causes
+this checkpoint to stop collapsing -- itself a notable behaviour change at
+this tiny step budget -- is reported by name instead of silently passing
+through the mse_vx/rt_rmse/missed/false comparison alone. A real
+convergence gate (model trained far enough to NOT collapse, asserting
+non-collapse) is recommended as a release-scale follow-up -- see
+"Step/frame budget" below and tests/README.md.
+
 A small step budget of real training on the real D1 dataset
 (data/gns-sample/case3.200m.homo.a.Vw/dataset/), from scratch (seeded init,
 no resume from the published 3M-step checkpoint), followed by a real rollout
@@ -37,6 +56,12 @@ Marked `nightly`/`slow`: NOT part of the fast local loop
 (`-m "not slow"`), and not intended to gate every PR -- run it explicitly:
     pytest tests/ -m convergence_gate_nightly -q
 
+Falsify check (victor-reyes audit MAJOR 2): tests/test_convergence_gate_nightly_falsify.py
+(marker `convergence_gate_nightly_falsify`) re-runs this pipeline with
+lr_init perturbed +10% and asserts the comparison above FAILS -- run it
+explicitly:
+    pytest tests/ -m convergence_gate_nightly_falsify -q
+
 Regeneration (deliberate, reviewed act only):
     python3 tests/fixtures/training_golden/generate_tier2_reference.py
 """
@@ -62,11 +87,22 @@ ROLLOUT_FRAMES = 40  # truncation of the real 827-frame trajectory; see module d
 REL_TOL = 1e-4
 
 
-def _run_pipeline(tmp_path):
+def _run_pipeline(tmp_path, lr_scale=1.0):
+    """Run tier 2's training+rollout pipeline. `lr_scale` != 1.0 perturbs the
+    copied config's lr_init before the run -- a test-only mutation of a
+    fixture COPY in tmp_path, never of tests/fixtures/training_golden/
+    config.json itself -- used by test_convergence_gate_nightly_falsify.py."""
     common.require_d1_dataset()
     model_dir = tmp_path / "model"
     model_dir.mkdir()
-    shutil.copy(common.CONFIG_SRC, model_dir / "config.json")
+    if lr_scale == 1.0:
+        shutil.copy(common.CONFIG_SRC, model_dir / "config.json")
+    else:
+        with open(common.CONFIG_SRC) as f:
+            cfg = json.load(f)
+        cfg["lr_init"] = cfg["lr_init"] * lr_scale
+        with open(model_dir / "config.json", "w") as f:
+            json.dump(cfg, f)
 
     common.run_cli([
         "--mode=train",
@@ -125,6 +161,17 @@ def test_convergence_gate_nightly_rollout_metrics_within_band(tmp_path):
     for key in ("missed", "false"):
         if current[key] != ref[key]:
             bad.append(f"{key} {ref[key]} -> {current[key]}")
+    # This tier is a regression-determinism golden for an EXPECTED-COLLAPSED
+    # checkpoint (see module docstring, victor-reyes audit MAJOR 4) -- unlike
+    # gate.py's own compare(), it does not auto-fail on `collapsed`. Instead,
+    # assert the collapse STATUS itself matches the reference explicitly: a
+    # future change that makes this 30-step checkpoint stop collapsing (or
+    # start collapsing, if the reference is ever regenerated non-collapsed)
+    # is a real behaviour change at this step budget and must be reported by
+    # name, not silently absorbed into the mse_vx/rt_rmse/missed/false diff.
+    if current.get("collapsed") != ref.get("collapsed"):
+        bad.append(f"collapsed {ref.get('collapsed')} -> {current.get('collapsed')} "
+                    f"(var_ratio {ref.get('var_ratio'):.3g} -> {current.get('var_ratio', float('nan')):.3g})")
     assert not bad, (
         "rollout metrics on real D1 (small-budget training + truncated test "
         "trajectory) drifted from the committed band -- either the training/rollout "
