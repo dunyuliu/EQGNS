@@ -47,7 +47,8 @@ flags.DEFINE_integer('rollout_batch_size', 1, help=(
     'Number of same-length test trajectories rolled out together as one disjoint graph. '
     'Default 1: the original one-trajectory-at-a-time path, bit-identical to before. '
     '>1: same math per trajectory, but rounding differs and long rollouts can diverge during '
-    'active rupture; use for evaluation, not for the paper-parity gate (docs/user/ROLLOUT_BATCHING.md).'))
+    'active rupture; use for evaluation, not for the paper-parity gate '
+    '(docs/user/rollout_and_analysis.md, "Batched rollout").'))
 flags.DEFINE_enum('rollout_fast', 'off', ['off', 'fp32', 'tf32', 'fp16', 'bf16'], help=(
     'Opt-in fast rollout (meshnet/fast_rollout.py): static-graph restructured GNN, torch.compile and '
     'a CUDA graph per step, with fp32 / tf32 / fp16 / bf16 matmuls. Default off: the original path. '
