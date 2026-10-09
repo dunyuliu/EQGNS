@@ -98,6 +98,35 @@ No precision has an owner-approved default yet; `tf32` is the only one passing t
 current band on every case. `gate.py run` (flag off) is unaffected and passed all 8
 cases in the same session.
 
+## The final gate (`gate.py regression`)
+
+```bash
+python3 tests/paper_parity/gate.py regression --precision tf32 --cuda 0              # all 7 non-truncated cases
+python3 tests/paper_parity/gate.py regression --precision tf32 --falsify --cuda 0    # planted x1.005 regression must FAIL
+```
+
+Implements the redesign above: per trajectory, delta RT RMSE (s), delta Mw, and
+missed+false between the fast/eager rollout and a freshly generated deterministic
+rollout of the PUBLISHED code (same construction as `reference.json`, just not
+cached -- this gate needs raw per-trajectory arrays, not `reference.json`'s
+aggregated summaries). Math reused from `measure_vs_published.py`'s
+`compare_pair()`/`fresh_raw_rollout()`, not redefined (`PROJECT_RULES.md` rule 7).
+
+Owner-approved thresholds (`PATHWAY_FORWARD.md` `release-gate-decisions-pending`
+row (a), 2026-10-09), uniform across eager/fast-fp32/fast-tf32 and every case:
+delta RT RMSE &lt;= 4 dt (dt = 0.0167777 s); |delta Mw| &lt;= 0.03; missed+false = 0.
+`--tier tight` (3 dt / 0.02) is the owner's specified fallback if the falsify
+acceptance check passes under the default tier. `M2_D3` (all trajectories) and
+`M3_D3` trajectory 7 are reported but excluded from the pass/fail decision (same
+owner decision; see `gate.regression_ok()`'s `REGRESSION_EXCLUDE_*`).
+
+**Status**: implemented and unit-tested (`test_regression_gate_logic.py`, pure
+threshold/exclusion logic, no GPU). The GPU falsify acceptance check required
+before this gate is considered usable for merges -- `gate.py regression
+--falsify`, weights x1.005 must FAIL -- has NOT yet been run (no idle GPU at
+implementation time); do not treat this gate as validated until that check's
+output is recorded here or on the board.
+
 ## Dataset padding
 
 The prepared test sets end each scenario with 72 padded frames (steps 755-826:
