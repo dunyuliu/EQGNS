@@ -79,7 +79,9 @@ No thresholds are computed or proposed anywhere in this script -- raw
 numbers only (owner's instruction; thresholds are a separate decision).
 """
 import argparse
+import csv
 import importlib.util
+import json
 import pickle
 import subprocess
 import sys
@@ -102,6 +104,55 @@ _prd_spec.loader.exec_module(prd)  # only used for compute_moment(); no __main__
 WINDOW = 755  # steps 0-754 inclusive, fixed by the owner for this table
 
 CASES_FOR_TABLE = [c for c in gate.CASES if c not in gate.TRUNCATE_TO_PUBLISHED]
+
+# Machine-readable artifacts (board row test-suite-overhaul, owner
+# iris-vermeulen). Fixed, owner-specified paths -- gitignored under
+# PROJECT_RULES.md rule 4's runs/ convention, never git-added.
+OUT_DIR = gate.REPO / "runs" / "20261009_test-suite-measurement-table"
+RAW_CSV = OUT_DIR / "raw_table.csv"
+METRICS_JSONL = OUT_DIR / "per_trajectory_metrics.jsonl"
+
+# Columns of raw_table.csv -- exactly the markdown table's columns, machine names.
+RAW_COLUMNS = ["row_type", "case", "traj", "delta_rt_rmse_s", "delta_mw",
+               "vx_rmse_norm", "vy_rmse_norm", "missed", "false", "note"]
+
+# Per-trajectory intermediate values compare_pair() computes internally but
+# the markdown table / raw_table.csv discard -- captured here so they don't
+# have to be re-derived ad hoc for future diagnosis. rt_a/rt_b/hit_a/hit_b
+# are per-node arrays (one rupture-time / hit-flag per mesh node, so JSONL,
+# not CSV -- a flat CSV cell can't hold a 4743-length array cleanly).
+EXTRA_KEYS = ["rt_a", "rt_b", "hit_a", "hit_b", "moment_a", "moment_b",
+              "mw_a", "mw_b", "peak_b_vx", "peak_b_vy"]
+
+
+def _already_done_blocks():
+    """(row_type, case) pairs already fully written to RAW_CSV -- lets a
+    restart after an interruption skip finished blocks instead of redoing
+    the whole sweep. A block is only ever appended after its full
+    rows_for() list is computed, so presence in the CSV means complete."""
+    if not RAW_CSV.exists():
+        return set()
+    with open(RAW_CSV, newline="") as f:
+        return {(r["row_type"], r["case"]) for r in csv.DictReader(f)}
+
+
+def _append_block(rows):
+    """Append one (row_type, case) block's rows to both artifacts. Called
+    once per finished block, not only at the end of the whole sweep, so an
+    interrupted run keeps every block completed so far."""
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    write_header = not RAW_CSV.exists()
+    with open(RAW_CSV, "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=RAW_COLUMNS)
+        if write_header:
+            w.writeheader()
+        for r in rows:
+            w.writerow({k: r[k] for k in RAW_COLUMNS})
+    with open(METRICS_JSONL, "a") as f:
+        for r in rows:
+            rec = {"row_type": r["row_type"], "case": r["case"], "traj": r["traj"]}
+            rec.update({k: r[k] for k in EXTRA_KEYS})
+            f.write(json.dumps(rec) + "\n")
 
 
 def _load_published(case):
@@ -193,19 +244,34 @@ def compare_pair(pkl_a, pkl_b):
     mw_b = (2.0 / 3.0) * (np.log10(moment_b) - 9.1) if moment_b > 0 else None
     delta_mw = (mw_a - mw_b) if (mw_a is not None and mw_b is not None) else None
 
-    def norm_rmse(comp):
-        peak_b = np.max(np.abs(pred_b[..., comp]))
+    peak_b_vx = float(np.max(np.abs(pred_b[..., 0])))
+    peak_b_vy = float(np.max(np.abs(pred_b[..., 1])))
+
+    def norm_rmse(comp, peak_b):
         rmse = float(np.sqrt(np.mean((pred_a[..., comp] - pred_b[..., comp]) ** 2)))
         return (rmse / peak_b) if peak_b > 0 else None
 
     return {
         "delta_rt_rmse_s": rt_rmse,
         "delta_mw": delta_mw,
-        "vx_rmse_norm": norm_rmse(0),
-        "vy_rmse_norm": norm_rmse(1),
+        "vx_rmse_norm": norm_rmse(0, peak_b_vx),
+        "vy_rmse_norm": norm_rmse(1, peak_b_vy),
         "missed": missed,
         "false": false,
         "note": note,
+        # Intermediate per-node / scalar values, discarded by the markdown
+        # table and raw_table.csv but captured here (see EXTRA_KEYS /
+        # per_trajectory_metrics.jsonl) for diagnosis, per owner instruction.
+        "rt_a": rt_a.tolist(),
+        "rt_b": rt_b.tolist(),
+        "hit_a": hit_a.tolist(),
+        "hit_b": hit_b.tolist(),
+        "moment_a": float(moment_a),
+        "moment_b": float(moment_b),
+        "mw_a": (float(mw_a) if mw_a is not None else None),
+        "mw_b": (float(mw_b) if mw_b is not None else None),
+        "peak_b_vx": peak_b_vx,
+        "peak_b_vy": peak_b_vy,
     }
 
 
@@ -260,42 +326,64 @@ def main():
     if unknown:
         sys.exit(f"unknown/unsupported case(s) (M1_large has no published/reference entry): {sorted(unknown)}")
 
+    done = _already_done_blocks()
+    if done:
+        print(f"resuming: {len(done)} (row_type, case) block(s) already in {RAW_CSV}, skipping",
+              file=sys.stderr, flush=True)
+
     all_rows = []
+    if RAW_CSV.exists():
+        with open(RAW_CSV, newline="") as f:
+            for r in csv.DictReader(f):
+                r["traj"] = int(r["traj"])
+                for k in ("delta_rt_rmse_s", "delta_mw", "vx_rmse_norm", "vy_rmse_norm"):
+                    r[k] = float(r[k]) if r[k] not in ("", "n/a") else None
+                r["missed"], r["false"] = int(r["missed"]), int(r["false"])
+                all_rows.append(r)
+
     t0 = time.time()
     for case in a.cases:
         print(f"=== {case} ===", file=sys.stderr, flush=True)
         published = _load_published(case)
 
-        if "det_ref_vs_published" in a.row_types:
+        if "det_ref_vs_published" in a.row_types and ("det_ref_vs_published", case) not in done:
             t1 = time.time()
             a_pkls = fresh_raw_rollout(case, cuda, code="published")
             print(f"  det_ref_vs_published: {len(a_pkls)} traj in {time.time()-t1:.0f}s",
                   file=sys.stderr, flush=True)
-            all_rows += rows_for("det_ref_vs_published", case, a_pkls, published)
+            rows = rows_for("det_ref_vs_published", case, a_pkls, published)
+            _append_block(rows)
+            all_rows += rows
 
-        if "fast_tf32_vs_published" in a.row_types:
+        if "fast_tf32_vs_published" in a.row_types and ("fast_tf32_vs_published", case) not in done:
             t1 = time.time()
             a_pkls = fresh_raw_rollout(case, cuda, code="current", extra=("--rollout_fast=tf32",))
             print(f"  fast_tf32_vs_published: {len(a_pkls)} traj in {time.time()-t1:.0f}s",
                   file=sys.stderr, flush=True)
-            all_rows += rows_for("fast_tf32_vs_published", case, a_pkls, published)
+            rows = rows_for("fast_tf32_vs_published", case, a_pkls, published)
+            _append_block(rows)
+            all_rows += rows
 
-        if "fast_fp32_vs_published" in a.row_types:
+        if "fast_fp32_vs_published" in a.row_types and ("fast_fp32_vs_published", case) not in done:
             t1 = time.time()
             a_pkls = fresh_raw_rollout(case, cuda, code="current", extra=("--rollout_fast=fp32",))
             print(f"  fast_fp32_vs_published: {len(a_pkls)} traj in {time.time()-t1:.0f}s",
                   file=sys.stderr, flush=True)
-            all_rows += rows_for("fast_fp32_vs_published", case, a_pkls, published)
+            rows = rows_for("fast_fp32_vs_published", case, a_pkls, published)
+            _append_block(rows)
+            all_rows += rows
 
-        if "eager_vs_eager_noise_floor" in a.row_types:
+        if "eager_vs_eager_noise_floor" in a.row_types and ("eager_vs_eager_noise_floor", case) not in done:
             t1 = time.time()
             run1 = fresh_eager_rollout(case, cuda)
             run2 = fresh_eager_rollout(case, cuda)
             print(f"  eager_vs_eager_noise_floor: {len(run1)}/{len(run2)} traj in {time.time()-t1:.0f}s",
                   file=sys.stderr, flush=True)
-            all_rows += rows_for("eager_vs_eager_noise_floor", case, run1, run2)
+            rows = rows_for("eager_vs_eager_noise_floor", case, run1, run2)
+            _append_block(rows)
+            all_rows += rows
 
-    print(f"total wall time: {time.time()-t0:.0f}s", file=sys.stderr, flush=True)
+    print(f"total wall time (this invocation): {time.time()-t0:.0f}s", file=sys.stderr, flush=True)
     print(to_markdown(all_rows))
 
 
