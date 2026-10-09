@@ -50,6 +50,16 @@ def pytest_configure(config):
         "markers", "paper_parity: reruns published checkpoints (opt-in, see tests/paper_parity/README.md)")
     config.addinivalue_line(
         "markers", "dataprep: guards scripts/utils/prepare*.4gns.py (EQdyna output -> npz) against regressions")
+    config.addinivalue_line(
+        "markers", "training_golden: tier 1 training-guard gate -- seeded deterministic training on "
+                   "real D1 vs a committed loss-curve reference (needs data/gns-sample/, skips if absent)")
+    config.addinivalue_line(
+        "markers", "convergence_gate_nightly: tier 2 training-guard gate -- small-budget real training "
+                   "+ rollout on real D1 vs a committed rollout-metrics reference (needs data/gns-sample/, "
+                   "skips if absent)")
+    config.addinivalue_line(
+        "markers", "nightly: not required for the fast local loop or the standard CI invocation; run "
+                   "explicitly via its own marker (e.g. `pytest tests/ -m convergence_gate_nightly`)")
 
 
 def pytest_addoption(parser):
