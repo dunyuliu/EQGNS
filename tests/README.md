@@ -14,6 +14,33 @@ unchanged, except for `test_pytorch.py`, `test_torch_geometric.py`, and
 `test_pytorch_cuda_gpu.py` -- trivial framework smoke scripts (no `test_`
 functions, zero tests collected) that exercised neither `gns/` nor
 `meshnet/`, removed as part of the `test-suite-overhaul` cleanup.
+
+A later slice of the same cleanup removed three more upstream leftovers,
+confirmed by grep to have no caller anywhere in `meshnet/` or `scripts/`
+(only `gns/train.py`/`gns/train_multinode.py`, which this project does not
+run, import them):
+- `test_data_loader.py` (`gns.data_loader.SamplesDataset`/
+  `TrajectoriesDataset` -- `meshnet/train.py` uses `meshnet.data_loader`'s
+  own, separate classes of the same name instead, covered by
+  `test_meshnet_unit_data_loader.py` / `test_meshnet_integration_train_rollout.py`).
+- `test_learned_simulator.py` (`gns.learned_simulator.LearnedSimulator`,
+  the particle-domain simulator class -- `meshnet/learned_simulator.py`'s
+  `MeshSimulator` is a different class, covered by
+  `test_meshnet_unit_learned_simulator.py`).
+- `test_noise_utils.py` (`gns.noise_utils.get_random_walk_noise_for_position_sequence`
+  plus `gns.learned_simulator.time_diff` -- `meshnet/noise.py`'s
+  `get_velocity_noise` is the function `meshnet/train.py` actually calls,
+  covered by `test_meshnet_unit_noise.py` / `test_meshnet_physical.py`; this
+  file also had its one quantitative assertion, a noise-std check, commented
+  out, i.e. it was down to a shape check and a zero-check on code nothing
+  here depends on).
+
+`test_graph_network.py` and `test_message_edge_features.py`, despite the
+same `gns.*` origin, are kept (not leftovers): `gns.graph_network`'s
+`EncodeProcessDecode`/`InteractionNetwork` are imported directly by
+`meshnet/learned_simulator.py` (`from gns import graph_network`) and are
+the actual message-passing backbone of the production `MeshSimulator`
+model -- these two files are this repo's only test coverage of that file.
 Everything below is new, under `meshnet` naming, and uses only
 a tiny synthetic dataset built on the fly by
 `tests/fixtures/meshnet/synth.py` -- never the (not checked out, 249GB)
