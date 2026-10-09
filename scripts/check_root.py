@@ -37,7 +37,6 @@ ROOT_FILES_ALLOWED = {
     "PROJECT_RULES.md",
     "LICENSE",
     "CITATION.cff",  # GitHub's citation widget only reads this at root
-    "Dockerfile",
     "requirements.txt",
 }
 
