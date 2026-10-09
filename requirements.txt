@@ -1,6 +1,6 @@
 absl-py==2.1.0
 autopep8==2.3.2
-numpy>=2.2.3
+numpy==2.2.3
 dm-tree==0.1.9
 matplotlib==3.10.1
 pyevtk==1.6.0

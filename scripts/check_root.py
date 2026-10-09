@@ -35,13 +35,10 @@ ROOT_FILES_ALLOWED = {
     "CLAUDE.md",
     "PATHWAY_FORWARD.md",
     "PROJECT_RULES.md",
-    "license.md",
+    "LICENSE",
     "CITATION.cff",  # GitHub's citation widget only reads this at root
     "Dockerfile",
     "requirements.txt",
-    "requirements.dl.txt",
-    "enviornment.yml",
-    "gns_env.yml",
 }
 
 # Root-level DIRECTORIES the template places at root. `evals/` and `data/`
@@ -52,7 +49,6 @@ ROOT_FILES_ALLOWED = {
 # `tests/`. `example/` is deliberately NOT here: the template moves it to
 # `docs/user/examples/`.
 ROOT_DIRS_ALLOWED = {
-    ".circleci",
     ".github",
     "docs",
     "evals",
@@ -68,7 +64,7 @@ ROOT_DIRS_ALLOWED = {
 # the only exception mechanism this gate carries -- there is no equivalent
 # list for root-entry violations: those fail until moved, full stop.
 PENDING_LARGE_FILES = {
-    "docs/img/meshnet.gif": ("pending owner", "convert to Git LFS or external hosting"),
+    "docs/img/meshnet.gif": ("owner-approved", "10.7MB; kept in git as-is, no LFS/external hosting"),
 }
 
 MAX_BYTES = 5 * 1024 * 1024

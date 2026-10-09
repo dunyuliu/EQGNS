@@ -2,22 +2,19 @@
 
 [![Paper DOI](https://img.shields.io/badge/JGR%20Solid%20Earth-10.1029%2F2025JB031981-blue)](https://doi.org/10.1029/2025JB031981)
 [![Software DOI](https://img.shields.io/badge/Zenodo-10.5281%2Fzenodo.17095311-blue)](https://doi.org/10.5281/zenodo.17095311)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/geoelements/gns/main/license.md)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 EQGNS is a Graph Network-based Simulator (GNS) for 2D earthquake dynamic rupture. It is the code behind:
 
 > Liu, D., & Becker, T. W. (2025). Earthquake rupture dynamics from graph neural networks. *Journal of Geophysical Research: Solid Earth*, 130. https://doi.org/10.1029/2025JB031981
 
-This repository is a fork of [geoelements/gns](https://github.com/geoelements/gns.git) by Drs. Krishna Kumar, Joseph Vantassel, and Yongjin Choi (The University of Texas at Austin).
+This repository is a fork of [geoelements/gns](https://github.com/geoelements/gns.git). Modifications are made to MeshNet, the mesh-based GNN surrogate, and include:
 
-Modifications are mainly made to MeshNet and they include:
  1. A parameter configuration system (`config.json` under the model path; see `meshnet/example.config.json`).
  2. A preprocessing pipeline to convert earthquake dynamic rupture states computed by [EQdyna](https://github.com/EQDYNA/EQdyna.git) to trajectories recognizable to the GNS (`scripts/utils/prepare.eqdyna.4gns.py`, `scripts/utils/prepare.fractal.stress.eqdyna.4gns.py`).
  3. A `node_property` channel carrying scalar initial-stress conditions per node, and an extra node type for high-stress asperities.
  4. Postprocessing rendering and analysis of earthquake rupture dynamics (`meshnet/render.py`, `scripts/utils/plot.rupture.dynamics.py`).
  5. Batch and scenario-sweep rollout drivers with cached graph construction for faster inference (`meshnet/batch_rollout.py`, `scripts/scenario.rollout.py`).
-
-Earthquake examples:
 
 <p align="left">
  <img src="docs/img/eq_multi_asp_rollout_0.gif" width="300" alt="Multi-asperity rupture rollout, where the model is trained at single asperity of selected prestresses"/>
@@ -32,368 +29,62 @@ If you use EQGNS, please cite the paper and the archived software:
 - Liu, D., & Becker, T. W. (2025). Earthquake rupture dynamics from graph neural networks. *Journal of Geophysical Research: Solid Earth*, 130. https://doi.org/10.1029/2025JB031981
 - Liu, D., & Becker, T. W. (2025). Source code and dataset for research article "Earthquake rupture dynamics from Graph Neural Networks". Zenodo. https://doi.org/10.5281/zenodo.17095311
 
-Please also cite the upstream GNS framework this work builds on:
+Please also cite the upstream GNS framework this work builds on, and the methods it follows:
 
 - Kumar, K., & Vantassel, J. (2023). GNS: A generalizable Graph Neural Network-based simulator for particulate and fluid modeling. *Journal of Open Source Software*, 8(88), 5025. https://doi.org/10.21105/joss.05025
+- The MeshNet architecture follows MeshGraphNets ([Pfaff et al., 2021](https://arxiv.org/abs/2010.03409)); the GNS approach follows [Sanchez-Gonzalez et al., 2020](https://arxiv.org/abs/2002.09405).
 
-The MeshNet architecture follows MeshGraphNets ([Pfaff et al., 2021](https://arxiv.org/abs/2010.03409)) and the GNS approach follows [Sanchez-Gonzalez et al., 2020](https://arxiv.org/abs/2002.09405).
+A machine-readable citation is in [CITATION.cff](CITATION.cff). License: MIT (see [LICENSE](LICENSE)).
 
-## EQGNS workflow
+## Installation
 
-The earthquake-specific pipeline, end to end:
+No conda: one `requirements.txt`, every direct dependency version-pinned.
 
-1. **Generate training data** with [EQdyna](https://github.com/EQDYNA/EQdyna.git) dynamic rupture simulations.
-2. **Convert to GNS trajectories**: `scripts/utils/prepare.eqdyna.4gns.py` (or `scripts/utils/prepare.fractal.stress.eqdyna.4gns.py` for fractal prestress) turns EQdyna outputs into `train.npz` / `valid.npz` / `test.npz` plus `metadata.json`. See [docs/user/data_preparation.md](docs/user/data_preparation.md).
-3. **Configure the model**: place a `config.json` (copy `meshnet/example.config.json`) under the model path.
-4. **Train**: directly via `python3 -m meshnet.train ...`, via the single-run wrapper `scripts/train_cli.py`, or via the hyperparameter-sweep driver `scripts/run.process.gns.py`. See [docs/user/training.md](docs/user/training.md).
-5. **Rollout**: single rollouts via `meshnet.train --mode=rollout`, sweeps over models/checkpoints via `scripts/scenario.rollout.py`, batched inference via `meshnet/batch_rollout.py`. See [docs/user/rollout_and_analysis.md](docs/user/rollout_and_analysis.md).
-6. **Render and analyze**: `meshnet/render.py` (gif animations), `scripts/utils/plot.rupture.dynamics.py` (rupture-time contours, slip rate, benchmarking against EQdyna ground truth), `scripts/utils/plot.loss.curve.py`.
+```shell
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+
+# CUDA wheels of torch/PyG are multi-GB; use the CPU index explicitly if
+# you don't have a GPU (swap in a CUDA index/wheel page otherwise):
+pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+pip install torch_geometric==2.6.1
+pip install torch_scatter==2.1.2 torch_sparse==0.6.18 torch_cluster==1.6.3 \
+  -f https://data.pyg.org/whl/torch-2.6.0+cpu.html
+
+pip install -r requirements.txt
+```
+
+For a CUDA build on a local server or TACC Frontera (validated stack:
+torch 2.6.0+cu124), use `scripts/build_venv.sh` / `scripts/build_venv_frontera.sh`
+instead, then `source scripts/start_venv.sh` to activate.
+
+## Quickstart
+
+No external dataset needed — the fast test tier trains and rolls out a tiny
+synthetic mesh end to end:
+
+```shell
+pytest tests/ -m "not slow" -q
+```
+
+Expected output: no `FAILED` lines, ending in `N passed` (a few
+`skipped`/`deselected` are expected — see `tests/README.md` for the tier
+breakdown). Run on a venv built fresh from the Installation step above, not
+one copied or moved after creation — a moved venv's compiled
+`torch_cluster`/`torch_sparse` extensions silently fail to load.
+
+For the real EQGNS pipeline (EQdyna data -> train -> rollout -> render) see
+the user guide:
+
+1. [Data preparation](docs/user/data_preparation.md) — convert EQdyna output to GNS trajectories.
+2. [Training](docs/user/training.md) — direct, single-run, and sweep entry points; `config.json`.
+3. [Rollout and analysis](docs/user/rollout_and_analysis.md) — single and batched inference.
+4. [Batched rollout](docs/user/ROLLOUT_BATCHING.md).
+5. [Inverse problem example](docs/user/example-1.md).
 
 ## Reproducing the paper
 
 - The exact code and dataset archived at publication are on Zenodo: https://doi.org/10.5281/zenodo.17095311
-- `meshnet/train.py.published` is a snapshot of `meshnet/train.py` as used for the paper; the current `meshnet/train.py` adds inference-speed optimizations that are mathematically equivalent (see `CLAUDE.md` for details).
-- Environments: `requirements.txt` (`numpy>=2.2.3`, local servers) vs. `requirements.dl.txt` (exact-pinned `numpy==2.2.3`); the numpy pin is the only intended difference, every other entry is pinned identically in both files to the validated stack below. `gns_env.yml` records a conda environment; `scripts/build_venv.sh` / `scripts/build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.
-
-## Introduction
-Graph Network-based Simulator (GNS) is a generalizable, efficient, and accurate machine learning (ML)-based surrogate simulator for particle- and mesh-based physical systems using Graph Neural Networks (GNNs). GNS has shown remarkable generability to simulated fluid, solid, deformables, particle systems with significant speedup comparing to traditional physics-based counterparts. GNS exploits distributed data parallelism to achieve fast multi-GPU training.
-
-## Run GNS/MeshNet
-
-> Training GNS/MeshNet on simulation data
-```shell
-# For particulate domain,
-python3 -m gns.train --data_path="<input-training-data-path>" --model_path="<path-to-load-save-model-file>" --ntraining_steps=100
-# For mesh-based domain,
-python3 -m meshnet.train --data_path="<input-training-data-path>" --model_path="<path-to-load-save-model-file>" --ntraining_steps=100
-```
-
-> Resume training
-
-To resume training specify `model_file` and `train_state_file`:
-
-```shell
-# For particulate domain,
-python3 -m gns.train --data_path="<input-training-data-path>" --model_path="<path-to-load-save-model-file>" --model_file="model.pt" --train_state_file="train_state.pt" --ntraining_steps=100
-# For mesh-based domain,
-python3 -m meshnet.train --data_path="<input-training-data-path>" --model_path="<path-to-load-save-model-file>" --model_file="model.pt" --train_state_file="train_state.pt" --ntraining_steps=100
-```
-
-> Rollout prediction
-```shell
-# For particulate domain,
-python3 -m gns.train --mode="rollout" --data_path="<input-data-path>" --model_path="<path-to-load-save-model-file>" --output_path="<path-to-save-output>" --model_file="model.pt" --train_state_file="train_state.pt"
-# For mesh-based domain,
-python3 -m meshnet.train --mode="rollout" --data_path="<input-data-path>" --model_path="<path-to-load-save-model-file>" --output_path="<path-to-save-output>" --model_file="model.pt" --train_state_file="train_state.pt"
-```
-
-> Render
-```shell
-# For particulate domain,
-python3 -m gns.render_rollout --output_mode="gif" --rollout_dir="<path-containing-rollout-file>" --rollout_name="<name-of-rollout-file>"
-# For mesh-based domain,
-python3 -m gns.render --rollout_dir="<path-containing-rollout-file>" --rollout_name="<name-of-rollout-file>"
-```
-
-In particulate domain, the renderer also writes `.vtu` files to visualize in ParaView.
-
-![Sand rollout](docs/img/rollout_0.gif)
-> GNS prediction of Sand rollout after training for 2 million steps.
-
-In mesh-based domain, the renderer writes `.gif` animation.
-
-![Fluid flow rollout](docs/img/meshnet.gif)
-> Meshnet GNS prediction of cylinder flow after training for 1 million steps.
-
-
-## Command line arguments details
-<details>
-<summary>`train.py` in GNS (particulate domain) </summary>
-
-**mode (Enum)** 
-
-This flag is used to set the operation mode for the script. It can take one of three values; 'train', 'valid', or 'rollout'.
-
-**batch_size (Integer)**
-
-Batch size for training.
-
-**noise_std (Float)** 
-
-Standard deviation of the noise when training.
-
-**data_path (String)** 
-
-Specifies the directory path where the dataset is located. 
-The dataset is expected to be in a specific format (e.g., .npz files).
-It should contain `metadata.json`.
-If `--mode` is training, the directory should contain `train.npz`.
-If `--mode` is testing (rollout), the directory should contain `test.npz`.
-If `--mode` is valid, the directory should contain `valid.npz`.
-
-**model_path (String)** 
-
-The directory path where the trained model checkpoints are saved during training or loaded from during validation/rollout.
-
-**output_path (String)** 
-
-Defines the directory where the outputs (e.g., rollouts) are saved, 
-when the `--mode` is set to rollout.
-This is particularly relevant in the rollout mode where the predictions of the model are stored.
-
-**output_filename (String)** 
-
-Base filename to use when saving outputs during rollout.
-Default is "rollout", and the output will be saved as `rollout.pkl` in `output_path`. 
-It is not intended to include the file extension.
-
-**model_file (String)** 
-
-The filename of the model checkpoint to load for validation or rollout (e.g., model-10000.pt). 
-It supports a special value "latest" to automatically select the newest checkpoint file. 
-This flexibility facilitates the evaluation of models at different stages of training.
-
-**train_state_file (String)** 
-
-Similar to model_file, but for loading the training state (e.g., optimizer state).
-It supports a special value "latest" to automatically select the newest checkpoint file. 
-(e.g., training_state-10000.pt)
-
-**ntraining_steps (Integer)** 
-
-The total number of training steps to execute before stopping.
-
-**nsave_steps (Integer)** 
-
-Interval at which the model and training state are saved.
-
-**lr_init (Float)** 
-
-Initial learning rate.
-
-**lr_decay (Float)** 
-
-How much the learning rate should decay over time.
-
-**lr_decay_steps (Integer)** 
-
-Steps at which learning rate should decay.
-
-**cuda_device_number (Integer)** 
-
-Base CUDA device (zero indexed).
-Default is None so default CUDA device will be used.
-
-**n_gpus (Integer)** 
-
-Number of GPUs to use for training.
-</details>
-
-
-
-<details>
-<summary>`train.py` in MeshNet (mesh-based domain) </summary>
-
-**mode (String)**
-
-This flag is used to set the operation mode for the script. It can take one of three values; 'train', 'valid', or 'rollout'.
-
-**batch_size (Integer)** 
-
-Batch size for training.
-
-**data_path (String)**
-
-Specifies the directory path where the dataset is located. 
-The dataset is expected to be in a specific format (e.g., .npz files).
-If `--mode` is training, the directory should contain `train.npz`.
-If `--mode` is testing (rollout), the directory should contain `test.npz`.
-If `--mode` is valid, the directory should contain `valid.npz`.
-
-**model_path (String)** 
-
-The directory path where the trained model checkpoints are saved during training or loaded from during validation/rollout.
-
-**output_path (String)**
-
-Defines the directory where the outputs (e.g., rollouts) are saved, 
-when the `--mode` is set to rollout.
-This is particularly relevant in the rollout mode where the predictions of the model are stored.
-
-**model_file (String)**
-
-The filename of the model checkpoint to load for validation or rollout (e.g., model-10000.pt). 
-It supports a special value "latest" to automatically select the newest checkpoint file. 
-This flexibility facilitates the evaluation of models at different stages of training.
-
-**train_state_file (String)**
-
-Similar to model_file, but for loading the training state (e.g., optimizer state).
-It supports a special value "latest" to automatically select the newest checkpoint file. 
-(e.g., training_state-10000.pt)
-
-**cuda_device_number (Integer)**
-
-Allows specifying a particular CUDA device for training or evaluation, enabling the use of specific GPUs in multi-GPU setups.
-
-**rollout_filename (String)**
-
-Base name for saving rollout files. The actual filenames will append an index to this base name.
-
-**ntraining_steps (Integer)**
-
-The total number of training steps to execute before stopping.
-
-**nsave_steps (Integer)**
-
-Interval at which the model and training state are saved.
-
-</details>
-
-## Datasets
-### Particulate domain:
-We use the numpy `.npz` format for storing positional data for GNS training.  The `.npz` format includes a list of tuples of arbitrary length where each tuple corresponds to a differenet training trajectory and is of the form `(position, particle_type)`.  The data loader provides `INPUT_SEQUENCE_LENGTH` positions, set equal to six by default, to provide the GNS with the last `INPUT_SEQUENCE_LENGTH` minus one positions as input to predict the position at the next time step.  The `position` is a 3-D tensor of shape `(n_time_steps, n_particles, n_dimensions)` and `particle_type` is a 1-D tensor of shape `(n_particles)`.  
-
-The dataset contains:
-
-* Metadata file with dataset information `(sequence length, dimensionality, box bounds, default connectivity radius, statistics for normalization, ...)`:
-
-```
-{
-  "bounds": [[0.1, 0.9], [0.1, 0.9]], 
-  "sequence_length": 320, 
-  "default_connectivity_radius": 0.015, 
-  "dim": 2, 
-  "dt": 0.0025, 
-  "vel_mean": [5.123277536458455e-06, -0.0009965205918140803], 
-  "vel_std": [0.0021978993231675805, 0.0026653552458701774], 
-  "acc_mean": [5.237611158734309e-07, 2.3633027988858656e-07], 
-  "acc_std": [0.0002582944917306106, 0.00029554531667679154]
-}
-```
-* npz containing data for all trajectories `(particle types, positions, global context, ...)`:
-
-Training datasets for Sand, SandRamps, and WaterDropSample are available on [DesignSafe Data Depot](https://www.designsafe-ci.org/data/browser/public/designsafe.storage.published/PRJ-3702) [@vantassel2022gnsdata].
-
-We provide the following datasets:
-  * `WaterDropSample` (smallest dataset)
-  * `Sand`
-  * `SandRamps`
-
-Download the dataset [DesignSafe DataDepot](https://doi.org/10.17603/ds2-0phb-dg64). If you are using this dataset please cite [Vantassel and Kumar., 2022](https://github.com/geoelements/gns#dataset)
-
-### Mesh-based domain:
-We also use the numpy `.npz` format for storing data for training meshnet GNS.
-
-The dataset contains:
-* npz containing python dictionary describing mesh data and relevant dynamics at mesh nodes for all trajectories. The dictionary includes `{pos: (ntimestep, nnodes, ndims), node_type: (ntimestep, nnodes, ntypes), velocity: (ntimestep, nnodes, ndims), pressure: (ntimestep, nnodes, 1), cells: (ntimestep, ncells, 3)}`
-
-The dataset is shared on [DesignSafe DataDepot](https://doi.org/10.17603/ds2-fzg7-1719). If you are using this dataset please cite [Kumar and Choi., 2023](https://github.com/geoelements/gns#dataset)
-
-## Installation
-
-GNS uses [pytorch geometric](https://www.pyg.org/) and [CUDA](https://developer.nvidia.com/cuda-downloads). These packages have specific requirements, please see [PyG installation](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html) for details. 
-
-> CPU-only installation on Linux
-
-```shell
-conda install -y pytorch torchvision torchaudio cpuonly -c pytorch
-conda install -y pyg -c pyg
-conda install -y pytorch-cluster -c pyg
-conda install -y absl-py -c anaconda 
-conda install -y numpy dm-tree matplotlib-base pyevtk -c conda-forge 
-```
-You can use the [WaterDropletSample](https://github.com/geoelements/gns-sample) dataset to check if your `gns` code is working correctly.
-
-To test the code you can run:
-
-```
-pytest tests/
-```
-
-To test on the small waterdroplet sample:
-
-```
-git clone https://github.com/geoelements/gns-sample
-
-TMP_DIR="./gns-sample"
-DATASET_NAME="WaterDropSample"
-
-mkdir -p ${TMP_DIR}/${DATASET_NAME}/models/
-mkdir -p ${TMP_DIR}/${DATASET_NAME}/rollout/
-
-DATA_PATH="${TMP_DIR}/${DATASET_NAME}/dataset/"
-MODEL_PATH="${TMP_DIR}/${DATASET_NAME}/models/"
-ROLLOUT_PATH="${TMP_DIR}/${DATASET_NAME}/rollout/"
-
-python -m gns.train --data_path=${DATA_PATH} --model_path=${MODEL_PATH} --ntraining_steps=10
-```
-
-### Building GNS environment on TACC (LS6 and Frontera)
-
-- to setup a virtualenv
-
-```shell
-sh ./scripts/build_venv.sh            # local servers
-sh ./scripts/build_venv_frontera.sh   # TACC Frontera
-```
-
-- check tests run sucessfully.
-- start your environment
-
-```shell
-source scripts/start_venv.sh
-```
-
-### Building GNS on MacOS
-```shell
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip3 install torch_geometric
-pip3 install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.3.0+cpu.html
-pip3 install -r requirements.txt
-```
-
-## GNS training in parallel
-GNS can be trained in parallel on multiple nodes with multiple GPUs.
-
-### GNS Scaling results
-![RTXwaterdrop](docs/img/RTX-5000_WaterDropSample.png)
-> GNS scaling results on [TACC Frontera GPU nodes](https://docs.tacc.utexas.edu/hpc/frontera/#table3) with RTX-5000 GPUs.
-
-![A100sand3d](docs/img/A100_Barrier_Interaction.png)
-> GNS scaling result on [TACC lonestar6 GPU nodes](https://docs.tacc.utexas.edu/hpc/lonestar6/#table2) with A100 GPUs.
-
-### Usage
-#### Single Node, Multi-GPU
-```shell
-python -m torch.distributed.launch --nnodes=1  --nproc_per_node=[GPU_PER_NODE] --node_rank=[LOCAL_RANK] --master_addr=[MAIN_RANK] gns/train_multinode.py [ARGS] 
-```
-
-#### Multi-node, Multi-GPU
-On each node, run
-```shell
-python -m torch.distributed.launch --nnodes=[NNODES]  --nproc_per_node=[GPU_PER_NODE] --node_rank=[LOCAL_RANK] --master_addr=[MAIN_RANK ]gns/train_multinode.py [ARGS] 
-```
-
-### Inspiration
-PyTorch version of Graph Network Simulator and Mesh Graph Network Simulator are based on:
-* [https://arxiv.org/abs/2002.09405](https://arxiv.org/abs/2002.09405) and [https://github.com/deepmind/deepmind-research/tree/master/learning_to_simulate](https://github.com/deepmind/deepmind-research/tree/master/learning_to_simulate)
-* [https://arxiv.org/abs/2010.03409](https://arxiv.org/abs/2002.09405) and [https://github.com/deepmind/deepmind-research/tree/master/meshgraphnets](https://github.com/deepmind/deepmind-research/tree/master/meshgraphnets)
-* [https://github.com/echowve/meshGraphNets_pytorch](https://github.com/echowve/meshGraphNets_pytorch)
-
-### Acknowledgement
-This code is based upon work supported by the National Science Foundation under Grant OAC-2103937.
-
-### Citation (upstream GNS framework)
-
-See also [How to cite](#how-to-cite) above for the EQGNS-specific citations.
-
-#### Repo
-Kumar, K., & Vantassel, J. (2023). GNS: A generalizable Graph Neural Network-based simulator for particulate and fluid modeling. Journal of Open Source Software, 8(88), 5025. https://doi.org/10.21105/joss.05025
-
-#### Dataset
-* Vantassel, Joseph; Kumar, Krishna (2022) “Graph Network Simulator Datasets.” DesignSafe-CI. https://doi.org/10.17603/ds2-0phb-dg64 v1 
-* Kumar, K., Y. Choi. (2023) "Cylinder flow with graph neural network-based simulator." DesignSafe-CI. https://doi.org/10.17603/ds2-fzg7-1719
-
-#![Longer fault dynamics rollout, where the model is trained at shorter length (GNS' inductive bias)](docs/img/eq_long_fault_rollout_0.gif)
-#> GNS prediction of rupture dynamics for 40 km long rupture after training for 3 million steps.
+- `meshnet/train.py.published` is a snapshot of `meshnet/train.py` as used for the paper; the current `meshnet/train.py` adds inference-speed optimizations that are mathematically equivalent (see `docs/dev/ROLLOUT_SPEED.md`).
+- `requirements.txt` is the single, pinned environment manifest; `scripts/build_venv.sh` / `scripts/build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.

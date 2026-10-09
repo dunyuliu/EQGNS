@@ -1,5 +1,11 @@
 # Method
 
+The general GNN / message-passing / encode-process-decode formalism below is
+the architecture `meshnet/` (EQGNS) also uses, with mesh nodes and the
+fault-rupture `node_property`/`node_type` features in place of the particles
+and particle types used for illustration here (see
+[MeshNet data](flow_data.md) for the EQGNS-specific feature set).
+
 ## Graph Neural Networks (GNNs) and message passing
 
 ### Graphs

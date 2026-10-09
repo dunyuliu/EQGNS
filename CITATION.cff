@@ -6,6 +6,7 @@ authors:
 - family-names: Becker
   given-names: Thorsten W.
 doi: 10.5281/zenodo.17095311
+license: MIT
 message: If you use this software, please cite our article in JGR Solid
   Earth, the archived software, and the upstream GNS framework (see
   references).
