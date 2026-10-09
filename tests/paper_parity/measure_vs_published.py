@@ -163,14 +163,19 @@ def _load_published(case):
     return pkls
 
 
-def fresh_raw_rollout(case, cuda, code="current", extra=()):
+def fresh_raw_rollout(case, cuda, code="current", extra=(), model_dir=None):
     """Deterministic rollout via `det_rollout.py` (same subprocess shape as
     `gate.run_rollout`), returning the RAW per-trajectory pkl dicts instead
     of `gate.metrics()` summaries (which this script does not want -- it
     diffs raw arrays against another raw array, not against each side's own
-    ground truth)."""
+    ground truth).
+
+    model_dir: override the case's own checkpoint dir (default None -- the
+    normal published checkpoint). Used by gate.py's regression-gate falsify
+    path to point at a weights-scaled copy without duplicating this
+    subprocess plumbing."""
     ds, npz, (mdir, step), _ = gate.CASES[case]
-    model_dir = gate.DATA / ds / mdir
+    model_dir = model_dir or gate.DATA / ds / mdir
     dataset_dir = gate.REGEN_DATASET_DIR.get(case, gate.DATA / ds / "dataset")
     with tempfile.TemporaryDirectory() as data_dir, tempfile.TemporaryDirectory() as out_dir:
         (Path(data_dir) / "test.npz").symlink_to(dataset_dir / npz)

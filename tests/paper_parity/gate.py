@@ -76,6 +76,40 @@ COLLAPSE_TOL = 0.5      # var(pred)/var(gt) below this: flat/degenerate forecast
 FAST_CASES = ["M1_D1", "M2_D3", "M3_D3"]
 FAST_TOL = {"rt_rmse": 1.05, "missed+false": 2.0, "mse_vx": 1.5}
 
+# Fast-rollout-vs-reference-rollout regression gate (`gate.py regression`),
+# owner-approved thresholds, PATHWAY_FORWARD.md `release-gate-decisions-pending`
+# row (a), 2026-10-09: one uniform threshold set for every gated path
+# (eager/default, fast fp32, fast tf32) and every case. "default" tier is the
+# owner's first approval; "tight" is the fallback the owner specified if the
+# falsify acceptance check (weights x1.005 must FAIL) passes under "default"
+# (too loose) -- per that decision, if "tight" also passes, that must be
+# reported back to the owner, not silently accepted.
+REGRESSION_TOL_DT = {"default": 4, "tight": 3}      # x DT
+REGRESSION_TOL_MW = {"default": 0.03, "tight": 0.02}
+# Owner-named exceptions (same decision): reported (never silently dropped
+# from output), never gated on.
+REGRESSION_EXCLUDE_CASES = {"M2_D3"}
+REGRESSION_EXCLUDE_TRAJ = {("M3_D3", 7)}
+
+
+def regression_ok(case, row, tier="default"):
+    """Verdict for one measure_vs_published.compare_pair() row (side A =
+    fast/eager rollout, side B = fresh deterministic reference rollout)
+    under the owner-approved thresholds above.
+
+    Returns True (pass), False (fail), or None (owner-excluded case/
+    trajectory -- reported by the caller, never counted against the gate)."""
+    if case in REGRESSION_EXCLUDE_CASES or (case, row["traj"]) in REGRESSION_EXCLUDE_TRAJ:
+        return None
+    rt_tol, mw_tol = REGRESSION_TOL_DT[tier] * DT, REGRESSION_TOL_MW[tier]
+    if row["delta_rt_rmse_s"] > rt_tol:
+        return False
+    if row["delta_mw"] is not None and abs(row["delta_mw"]) > mw_tol:
+        return False
+    if row["missed"] + row["false"] > 0:
+        return False
+    return True
+
 M1 = ("models.nmp10.cotopaxi", 3000000)
 M2 = ("models.nmp10.cotopaxi", 3000000)
 M3 = ("models.nmp10.lr3e-5.b8.cotopaxi.r1", 2700000)
@@ -400,14 +434,55 @@ def cmd_fast(cases, gpus, precision, falsify=False, scale=1.005):
     return all(ok)
 
 
+def cmd_regression(cases, cuda, precision, falsify=False, scale=1.005, tier="default"):
+    """The fast-rollout-vs-reference-rollout gate (owner decision (a), see
+    REGRESSION_TOL_* above): per trajectory, current code + --rollout_fast
+    (or, with falsify, a weights x`scale` copy of it) vs a freshly generated
+    deterministic rollout of the PUBLISHED code (same construction as
+    `cmd_reference`'s reference.json, just not cached -- the per-trajectory
+    raw arrays this gate needs aren't in reference.json, only their
+    aggregated gate.metrics() summaries). Reuses measure_vs_published.py's
+    compare_pair()/fresh_raw_rollout() for the actual RT/Mw/missed/false math
+    rather than redefining it (PROJECT_RULES.md rule 7); imported locally to
+    avoid the module-load circular import (measure_vs_published imports this
+    module at its own top level)."""
+    import measure_vs_published as mvp
+    extra = (f"--rollout_fast={precision}", "--rollout_batch_size=64")
+    all_ok = True
+    for case in cases:
+        ref_pkls = mvp.fresh_raw_rollout(case, cuda, code="published")
+        if falsify:
+            with tempfile.TemporaryDirectory() as tmp:
+                model_dir = scaled_model(case, Path(tmp), scale)
+                fast_pkls = mvp.fresh_raw_rollout(case, cuda, code="current", extra=extra, model_dir=model_dir)
+        else:
+            fast_pkls = mvp.fresh_raw_rollout(case, cuda, code="current", extra=extra)
+        rows = mvp.rows_for(f"regression_{precision}", case, fast_pkls, ref_pkls)
+        case_ok = True
+        for r in rows:
+            verdict = regression_ok(case, r, tier)
+            tag = "EXCLUDED(reported)" if verdict is None else ("PASS" if verdict else "FAIL")
+            print(f"  [{case}] traj {r['traj']}: {tag}  dRT={r['delta_rt_rmse_s']:.4g}s"
+                  f" dMw={r['delta_mw']} missed={r['missed']} false={r['false']}")
+            if verdict is False:
+                case_ok = False
+        all_ok &= case_ok
+    if falsify:
+        print(f"planted regression (weights x{scale}, tier={tier}) {'CAUGHT' if not all_ok else 'MISSED'}")
+        return not all_ok
+    return all_ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["run", "quick", "reference", "paper", "extract", "falsify", "fast"])
+    ap.add_argument("command", choices=["run", "quick", "reference", "paper", "extract", "falsify", "fast", "regression"])
     ap.add_argument("cases", nargs="*", help=f"default: all of {list(CASES)}")
     ap.add_argument("--cuda", required=True, help="GPU id(s), comma-separated; cases run in parallel (no default -- pick explicitly, GPU0 often hosts unrelated jobs on this box)")
     ap.add_argument("--quick", action="store_true", help="quick-tier variant")
     ap.add_argument("--precision", default="fp16", help="fast tier: --rollout_fast value")
-    ap.add_argument("--falsify", action="store_true", help="fast tier: planted regression must FAIL")
+    ap.add_argument("--falsify", action="store_true", help="fast/regression tier: planted regression must FAIL")
+    ap.add_argument("--tier", default="default", choices=["default", "tight"],
+                     help="regression tier: default=4dt/0.03, tight=3dt/0.02 (owner decision (a) fallback)")
     a = ap.parse_args()
     gpus = [int(g) for g in a.cuda.split(",")]
     quick = a.quick or a.command == "quick"
@@ -417,6 +492,8 @@ def main():
         cases = list(QUICK)
     elif a.command == "fast":
         cases = FAST_CASES
+    elif a.command == "regression":
+        cases = [c for c in CASES if c not in TRUNCATE_TO_PUBLISHED]
     elif a.command == "paper":
         # M1_large is in TRUNCATE_TO_PUBLISHED: it has no reference.json /
         # published.json entry (see published_reference() and its docstring),
@@ -439,6 +516,8 @@ def main():
         sys.exit(0 if cmd_run(cases, gpus, quick) else 1)
     if a.command == "fast":
         sys.exit(0 if cmd_fast(cases, gpus, a.precision, a.falsify) else 1)
+    if a.command == "regression":
+        sys.exit(0 if cmd_regression(cases, gpus[0], a.precision, a.falsify, tier=a.tier) else 1)
     if a.command == "extract":
         cmd_extract(cases)
     if a.command == "reference":
