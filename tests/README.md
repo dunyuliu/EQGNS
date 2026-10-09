@@ -10,7 +10,11 @@ satisfy.
 
 `tests/test_*.py` (upstream `geoelements/gns` unit tests for the
 particulate-domain `gns/` package) were here before this session and are
-unchanged. Everything below is new, under `meshnet` naming, and uses only
+unchanged, except for `test_pytorch.py`, `test_torch_geometric.py`, and
+`test_pytorch_cuda_gpu.py` -- trivial framework smoke scripts (no `test_`
+functions, zero tests collected) that exercised neither `gns/` nor
+`meshnet/`, removed as part of the `test-suite-overhaul` cleanup.
+Everything below is new, under `meshnet` naming, and uses only
 a tiny synthetic dataset built on the fly by
 `tests/fixtures/meshnet/synth.py` -- never the (not checked out, 249GB)
 `gns-sample` data.
@@ -232,8 +236,10 @@ larger gate, but it is also not a substitute for it.
   this belongs in the physical-behaviour tier next.
 - **GPU-path tests** (AMP / `torch.compile`, both documented in
   `CLAUDE.md`). Out of scope per the CPU-only constraint on this session;
-  `test_pytorch_cuda_gpu.py` already exists upstream for CUDA smoke-testing
-  and is a reasonable place to extend if a GPU CI runner is ever added.
+  no CUDA smoke test exists in this suite (the upstream
+  `test_pytorch_cuda_gpu.py` stub was removed, see top of this file) --
+  a GPU CI runner, if one is ever added, should start one fresh here
+  rather than resurrect the stub.
 - **`meshnet/batch_rollout.py` and `scripts/scenario.rollout.py`.** Real
   production entry points with no test coverage at any tier. Flagged for
   a follow-up session; not attempted here to keep this session's scope to
