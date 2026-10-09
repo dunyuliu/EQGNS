@@ -871,3 +871,71 @@ GPU state at handoff: GPU0 free, GPU1 free, GPU2 ~99% (unrelated job),
 GPU3 free. Host CPU load was heavy (~60-70/64) for most of the session —
 kept own thread counts capped (8 each) throughout, single training process
 at a time.
+
+## Conductor #3 pickup — 2026-10-09, autopilot "clear the board and self pace the release"
+
+Read verbatim by `release-gate-decisions-pending`: the owner already approved
+all three experiments (M1 arresting+mirror, M2/M3 mirror augmentation, M3
+batch-size/LR sweep on GH200, latter explicitly parallel) and the Docker/venv
+housekeeping. No owner call was actually pending for dispatch; proceeded.
+
+Verified before acting (gate axis 4 / housekeeping sanity):
+- `conductor-housekeeping-2026-10-09` row's claims hold: no `gns/gns/venv`
+  baked path remains in `venv/bin/*` (`grep` empty); the 4 stale A100 timing
+  artifacts are gone from `scratch/` (archived under
+  `/home/utig5/dliu/eqgns_scratch_archive/20261009_stale_timing/`, confirmed
+  present there). Nothing left for me to redo.
+- Live-agent check (`ps`, `git worktree list`) before any dispatch: one
+  stray local branch `worktree-agent-abe39c8718d109833` was byte-identical to
+  already-merged `443eab7` (PR #71) — no live process, no uncommitted work,
+  safe to delete. No other EQGNS agents running.
+
+Branch cleanup: deleted 5 remote branches confirmed `MERGED` via
+`gh pr list --state all --head <branch>` (not `git branch --merged`, since
+these are squash-merges): `design/m3-bs-lr-sweep` (PR #72), `docs/board-update-
+20261009-pr70-71-72` (PR #73), `docs/release-gate-housekeeping-20261009`
+(PR #69), `feat/gate-paper-metrics` (PR #71), `fix/rollout-batched-tolerance`
+(PR #70). Deleted local stale branch `worktree-agent-abe39c8718d109833`.
+
+`dev/m3-b4-b12-first-look` (diagnostic, unmerged, 1 commit, docs-only):
+landed rather than discarded — the finding is already on the board but the
+full per-trajectory write-up was only on this branch. PR #79, docs-only fast
+lane. Mechanics note for future self: `git push origin origin/main:refs/heads/
+<branch> -f` to "update" a stale PR branch is WRONG — it overwrites the
+branch to equal main (0 commits ahead), which silently auto-closed the PR
+(GitHub treats a 0-diff branch as nothing-to-merge). Recovered correctly:
+the LOCAL branch still had the original commit untouched, rebased it onto
+current main in a scratch worktree (`git rebase main`), force-pushed the
+rebased single commit, reopened the auto-closed PR, re-ran CI (green,
+`37988277807`), squash-merged (`29d2b15`). No content was lost — the local
+branch was the safety net — but the right move next time is `git rebase
+<base> <branch>` from the start, never a same-ref force-push "update."
+
+Dispatched 2 dunyu-liu agents in parallel (2/2 specialist slots, disjoint
+systems/files — one remote GH200, one local docs-only design, no collision):
+1. **GH200 M3 sweep pilot** — `≤2 node-hour` throughput pilot (b4/b8/b12
+   arms) per `docs/dev/M3_BATCH_LR_SWEEP_DESIGN.md` section 5, plus settling
+   open questions 2 (non-dev partition under EAR26006), 3 (true "b12" batch
+   size from launch/SLURM log), 4 (add final-slip RMSE to the sweep driver).
+   Explicit stop-and-report-to-conductor instruction before any spend beyond
+   the pilot cap; access constraints restated verbatim (existing control
+   socket only, EAR26006 only, never touch the other project's
+   sync_loop.sh/localroll.sh/control-master). No report yet.
+2. **M1 arresting+mirror / M2M3 mirror augmentation design** — design-only,
+   in the owner's stated order (M1 first, then M2/M3), own worktree, no
+   execution. EQdyna tree read-only, new scenarios (if any) under the
+   scenario-generation dir only. No report yet.
+
+Board updated (mechanical state-cell edits only, no re-scoping): `m1-
+arresting-mirror-expansion` and `m2m3-mirror-augmentation` flipped to IN
+PROGRESS (design dispatched); `m3-batchsize-lr-sweep-gh200` noted PR #79
+landing + pilot dispatch. Not touched: `m2-checkerboard-chaos-exclusion-
+decision` (owner's call, pending) and `paper-parity-gate-schema-and-count-
+gaps` (owned separately, tests/paper_parity — reported, not edited).
+
+Live roster at this checkpoint: 2 dunyu-liu agents (GH200 pilot; M1/M2M3
+design), both in their own worktrees, no PIDs known locally for the remote
+GH200 jobs (agent-managed). Main checkout clean, `git status --porcelain`
+empty, at whatever SHA the board-update PR below lands on. Ending this turn
+on a blocking wait for both agents' completion notices — do not re-dispatch
+either mission if "absent" on a later check; they are known-live.
