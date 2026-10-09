@@ -131,70 +131,66 @@ def predict(simulator: learned_simulator.MeshSimulator,
 
     print(f"Mean loss on rollout prediction: {prediction_data['mean_loss']} {prediction_data['mean_acc_loss']}")
 
-def rollout(simulator: learned_simulator.MeshSimulator,
-            features,
-            nsteps: int,
-            device):
+def _prepare_trajectory(features, device):
+    """Move one trajectory's features to device and build its (static) graph.
 
-    # Move data to device
-    node_coords = features[0].to(device)
-    node_types = features[1].to(device)
-    node_property = features[2].to(device)
-    velocities = features[3].to(device)
-    pressures = features[4].to(device)
-    cells = features[5].to(device)
+    Node positions don't move during a rollout, so the graph (edges, edge
+    features, node type/property) can be built once from the first frame and
+    reused for every step; only the velocities change per step.
+    """
+    node_coords, node_types, node_property, velocities, pressures, cells = (
+        f.to(device) for f in features[:6])
 
     initial_velocities = velocities[:INPUT_SEQUENCE_LENGTH]
     ground_truth_velocities = velocities[INPUT_SEQUENCE_LENGTH:]
     current_velocities = initial_velocities.squeeze()
-
     nnodes = current_velocities.shape[0]
-    predictions = torch.empty((nsteps,) + tuple(current_velocities.shape),
-                              dtype=current_velocities.dtype, device=device)
 
-    # OPTIMIZATION: Build graph structure once - only velocities change!
-    first_example = (
+    example = (
         (node_coords[0], node_types[0], node_property[0], current_velocities,
          pressures[0], cells[0], torch.zeros(nnodes, device=device)),
         ground_truth_velocities[0])
-    template_graph = datas_to_graph(first_example, dt=dt, device=device)
-    template_graph = transformer(template_graph)
+    graph = transformer(datas_to_graph(example, dt=dt, device=device))
 
-    # Cache everything that doesn't change
-    cached_edge_index = template_graph.edge_index
-    cached_edge_attr = template_graph.edge_attr  # Positions don't move!
-    cached_node_type = template_graph.x[:, 0]
-    cached_node_property = template_graph.x[:, 1]
+    return dict(node_coords=node_coords, node_types=node_types, node_property=node_property,
+                initial_velocities=initial_velocities, ground_truth_velocities=ground_truth_velocities,
+                current_velocities=current_velocities, nnodes=nnodes, graph=graph)
 
-    # Boundary nodes take ground-truth velocities; the mask is static, so compute it once.
-    kinematic_mask = torch.logical_or(cached_node_type == NodeType.NORMAL,
-                                      cached_node_type == NodeType.HIGH_STRESS)
+
+def _non_kinematic_mask(node_type):
+    """Mask of boundary nodes that take ground-truth velocities rather than a prediction."""
+    kinematic_mask = torch.logical_or(node_type == NodeType.NORMAL, node_type == NodeType.HIGH_STRESS)
     kinematic_mask = kinematic_mask.squeeze() if kinematic_mask.dim() > 1 else kinematic_mask
-    mask = ~kinematic_mask
+    return ~kinematic_mask
 
+
+def _run_rollout_steps(simulator, nsteps, current_velocities, node_type, node_property,
+                       edge_index, edge_attr, ground_truth_velocities, mask):
+    """Step the simulator nsteps times, pinning boundary nodes to ground truth each step."""
+    predictions = torch.empty((nsteps,) + tuple(current_velocities.shape),
+                              dtype=current_velocities.dtype, device=current_velocities.device)
     for step in tqdm(range(nsteps), total=nsteps):
-        # Only velocity changes - everything else is cached!
-
-        # Predict next velocity using cached values
         predicted_next_velocity = simulator.predict_velocity(
             current_velocities=current_velocities,
-            node_type=cached_node_type,
-            node_property=cached_node_property,
-            edge_index=cached_edge_index,
-            edge_features=cached_edge_attr)
+            node_type=node_type,
+            node_property=node_property,
+            edge_index=edge_index,
+            edge_features=edge_attr)
 
         # Apply ground truth velocities at boundary nodes
         predicted_next_velocity[mask] = ground_truth_velocities[step][mask]
         predictions[step] = predicted_next_velocity
-        
+
         # Update current position for the next prediction
         current_velocities = predicted_next_velocity
+    return predictions
 
+
+def _rollout_output(initial_velocities, predictions, ground_truth_velocities,
+                    node_coords, node_types, node_property):
     # Prediction with shape (time, nnodes, dim)
     loss = (predictions - ground_truth_velocities) ** 2
-    
-
-    output_dict = {
+    return {
         'initial_velocities': initial_velocities.cpu().numpy(),
         'predicted_rollout': predictions.cpu().numpy(),
         'ground_truth_rollout': ground_truth_velocities.cpu().numpy(),
@@ -202,10 +198,33 @@ def rollout(simulator: learned_simulator.MeshSimulator,
         'node_types': node_types.cpu().numpy(),
         'node_property': node_property.cpu().numpy(),
         'mean_loss': loss.mean().cpu().numpy(),
-        'mean_acc_loss':None
+        'mean_acc_loss': None
     }
 
-    return output_dict
+
+def rollout(simulator: learned_simulator.MeshSimulator,
+            features,
+            nsteps: int,
+            device):
+
+    traj = _prepare_trajectory(features, device)
+    graph = traj['graph']
+
+    # Cache everything that doesn't change
+    cached_edge_index = graph.edge_index
+    cached_edge_attr = graph.edge_attr  # Positions don't move!
+    cached_node_type = graph.x[:, 0]
+    cached_node_property = graph.x[:, 1]
+
+    # Boundary nodes take ground-truth velocities; the mask is static, so compute it once.
+    mask = _non_kinematic_mask(cached_node_type)
+
+    predictions = _run_rollout_steps(
+        simulator, nsteps, traj['current_velocities'], cached_node_type, cached_node_property,
+        cached_edge_index, cached_edge_attr, traj['ground_truth_velocities'], mask)
+
+    return _rollout_output(traj['initial_velocities'], predictions, traj['ground_truth_velocities'],
+                           traj['node_coords'], traj['node_types'], traj['node_property'])
 
 def rollout_batched(simulator: learned_simulator.MeshSimulator,
                     features_list,
@@ -216,22 +235,7 @@ def rollout_batched(simulator: learned_simulator.MeshSimulator,
     Per trajectory the computation is that of rollout(): the graphs share no edges, so
     message passing never mixes trajectories. Returns one output dict per trajectory.
     """
-    parts = []
-    for features in features_list:
-        node_coords, node_types, node_property, velocities, pressures, cells = (
-            f.to(device) for f in features[:6])
-        initial_velocities = velocities[:INPUT_SEQUENCE_LENGTH]
-        ground_truth_velocities = velocities[INPUT_SEQUENCE_LENGTH:]
-        current_velocities = initial_velocities.squeeze()
-        nnodes = current_velocities.shape[0]
-        example = ((node_coords[0], node_types[0], node_property[0], current_velocities,
-                    pressures[0], cells[0], torch.zeros(nnodes, device=device)),
-                   ground_truth_velocities[0])
-        graph = transformer(datas_to_graph(example, dt=dt, device=device))
-        parts.append(dict(nnodes=nnodes, graph=graph, initial=initial_velocities,
-                          truth=ground_truth_velocities, current=current_velocities,
-                          node_coords=node_coords, node_types=node_types,
-                          node_property=node_property))
+    parts = [_prepare_trajectory(features, device) for features in features_list]
 
     offsets = [0]
     for p in parts[:-1]:
@@ -240,40 +244,20 @@ def rollout_batched(simulator: learned_simulator.MeshSimulator,
     edge_attr = torch.cat([p['graph'].edge_attr for p in parts], dim=0)
     node_type = torch.cat([p['graph'].x[:, 0] for p in parts], dim=0)
     node_prop = torch.cat([p['graph'].x[:, 1] for p in parts], dim=0)
-    truth = torch.cat([p['truth'] for p in parts], dim=1)
-    current_velocities = torch.cat([p['current'] for p in parts], dim=0)
+    truth = torch.cat([p['ground_truth_velocities'] for p in parts], dim=1)
+    current_velocities = torch.cat([p['current_velocities'] for p in parts], dim=0)
 
-    kinematic_mask = torch.logical_or(node_type == NodeType.NORMAL, node_type == NodeType.HIGH_STRESS)
-    kinematic_mask = kinematic_mask.squeeze() if kinematic_mask.dim() > 1 else kinematic_mask
-    mask = ~kinematic_mask
+    mask = _non_kinematic_mask(node_type)
 
-    predictions = torch.empty((nsteps,) + tuple(current_velocities.shape),
-                              dtype=current_velocities.dtype, device=device)
-    for step in tqdm(range(nsteps), total=nsteps):
-        predicted_next_velocity = simulator.predict_velocity(
-            current_velocities=current_velocities,
-            node_type=node_type,
-            node_property=node_prop,
-            edge_index=edge_index,
-            edge_features=edge_attr)
-        predicted_next_velocity[mask] = truth[step][mask]
-        predictions[step] = predicted_next_velocity
-        current_velocities = predicted_next_velocity
+    predictions = _run_rollout_steps(
+        simulator, nsteps, current_velocities, node_type, node_prop,
+        edge_index, edge_attr, truth, mask)
 
     outputs = []
     for p, o in zip(parts, offsets):
         pred = predictions[:, o:o + p['nnodes']]
-        loss = (pred - p['truth']) ** 2
-        outputs.append({
-            'initial_velocities': p['initial'].cpu().numpy(),
-            'predicted_rollout': pred.cpu().numpy(),
-            'ground_truth_rollout': p['truth'].cpu().numpy(),
-            'node_coords': p['node_coords'].cpu().numpy(),
-            'node_types': p['node_types'].cpu().numpy(),
-            'node_property': p['node_property'].cpu().numpy(),
-            'mean_loss': loss.mean().cpu().numpy(),
-            'mean_acc_loss': None
-        })
+        outputs.append(_rollout_output(p['initial_velocities'], pred, p['ground_truth_velocities'],
+                                       p['node_coords'], p['node_types'], p['node_property']))
     return outputs
 
 def acceleration_loss(pred_acc, target_acc, non_kinematic_mask):
