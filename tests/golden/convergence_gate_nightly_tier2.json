@@ -1,0 +1,17 @@
+{
+  "metrics": {
+    "mse_vx": 2.7412338921082533,
+    "rt_rmse": 0.18869751783220107,
+    "missed": 31,
+    "false": 3462,
+    "var_ratio": 0.2536980351921477,
+    "collapsed": true
+  },
+  "ntraining_steps": 30,
+  "rollout_frames": 40,
+  "trajectory": "trajectory0",
+  "seed": 20260101,
+  "dataset": "data/gns-sample/case3.200m.homo.a.Vw/dataset (real D1, gitignored, not committed)",
+  "config": "tests/fixtures/training_golden/config.json (real M1 architecture, loss_report_step=1 test override)",
+  "device": "cpu (CUDA_VISIBLE_DEVICES='', see common.py)"
+}

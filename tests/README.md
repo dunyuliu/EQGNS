@@ -24,6 +24,8 @@ a tiny synthetic dataset built on the fly by
 | 3. End-to-end | `e2e`, `slow` | `test_meshnet_e2e_golden.py` | the real CLI (`python3 -m meshnet.train`, via a seeded wrapper) run `--mode=train` then `--mode=rollout` on a tiny deterministic dataset, diffed against a committed golden file |
 | 4. Physical-behaviour | `physical` | `test_meshnet_physical.py` | additive-acceleration identity through a real graph, zero-forcing -> zero-response asymptotic limit (mutation-verified to actually depend on the weights, not just the untrained normalizer floor), velocity-noise std vs `noise_std` |
 | 5. Data-prep guard | `dataprep` | `test_dataprep_prepare_eqdyna.py`, `test_dataprep_prepare_fractal_stress.py` | `scripts/utils/prepare.eqdyna.4gns.py` / `scripts/utils/prepare.fractal.stress.eqdyna.4gns.py`'s shared `create_train_data()` EQdyna-output -> npz conversion, on a tiny synthetic 4-node case built by `tests/fixtures/dataprep/synth_case.py`: frame count, shapes/dtypes, no all-zero frames (regression guard for the zero-tail bug fixed in PR #5 / commit 1afb989), the `nskip` raw-file-to-frame offset, fractal-stress node-property lookup, and train/valid/test split disjointness |
+| 6. Training-guard tier 1 (`training_golden`) | `training_golden`, `slow` | `test_training_golden.py` | real-data, real-architecture training-path gate: N=10 steps of the real `python3 -m meshnet.train` CLI on the real, published D1 dataset (`data/gns-sample/case3.200m.homo.a.Vw/dataset/`), real M1 architecture (10 message-passing steps, 128 latent dim), per-step train/valid loss vs a committed reference, tight tolerance |
+| 7. Training-guard tier 2 (`convergence_gate_nightly`) | `convergence_gate_nightly`, `nightly`, `slow` | `test_convergence_gate_nightly.py` | small-budget (N=30 steps) real training on real D1 from scratch, then a real rollout on a CPU-time-truncated real D1 test trajectory, scored with `tests/paper_parity/gate.py`'s own metrics (`mse_vx`, `rt_rmse`, `missed`, `false`) vs a committed reference |
 
 ## Running
 
@@ -45,6 +47,11 @@ pytest tests/ -m integration -q
 pytest tests/ -m e2e -q
 pytest tests/ -m physical -q
 pytest tests/ -m dataprep -q
+
+# Training-guard tiers (need data/gns-sample/ checked out -- see below;
+# auto-skip, not fail, anywhere else, including CI):
+pytest tests/ -m training_golden -q          # tier 1, ~2 min
+pytest tests/ -m convergence_gate_nightly -q # tier 2, ~6 min
 ```
 
 CI (`.github/workflows/tests.yml`) runs `pytest tests/ -m "not slow" -q`
@@ -57,7 +64,14 @@ Total measured runtime of the full `tests/` suite (63 tests, single CPU
 thread, this repo's `venv`): ~27s, of which ~13s is the two `python3 -m
 meshnet.train` subprocess launches in the e2e tier (import + torch/PyG
 startup dominates, not the tiny model itself); the 10-test `dataprep` tier
-adds ~3s.
+adds ~3s. This excludes the two training-guard tiers added after this
+measurement (tiers 6-7 below): on a machine WITHOUT `data/gns-sample/`
+checked out they add two near-instant skips; on a machine WITH it checked
+out (this is most machines that would run the full, unfiltered `pytest
+tests/ -q`, since that data is what makes them "with"), they actually run
+and add ~8 minutes (~2 min tier 1 + ~6 min tier 2) -- run them explicitly
+(`-m training_golden` / `-m convergence_gate_nightly`) rather than as part of
+every routine full-suite invocation.
 
 ## The golden file (tier 3)
 
@@ -84,6 +98,81 @@ change to `meshnet/`:
    above and say so explicitly in the commit message (e.g. "regenerate
    meshnet e2e golden: <why>"). Never regenerate to silence a failure
    whose cause you have not identified.
+
+## Training-guard tiers (tiers 6-7, PATHWAY_FORWARD.md row `training-guard`)
+
+Unlike every tier above, these two run against the REAL, published D1 dataset
+(`data/gns-sample/case3.200m.homo.a.Vw/dataset/`, PROJECT_RULES.md rule 3: a
+real, gitignored, 249GB-class directory that only exists on a machine that
+fetched `data/gns-sample/` -- never committed, never symlinked over, never
+present in GitHub Actions CI) and the real M1 model architecture (10
+message-passing steps, 128 latent dim -- `tests/fixtures/training_golden/
+config.json`, copied verbatim from `data/gns-sample/.../models.nmp10.cotopaxi
+/config.json` except for a test-only `loss_report_step` override). Both
+auto-skip (`fixtures/training_golden/common.py::require_d1_dataset`, no
+`pytest` flag needed) if that dataset is not present -- the same situation
+`tests/paper_parity`'s tests are in, except those need an explicit
+`--paper-parity` flag too; these two don't, since there is no risk of an
+expensive real-data run happening by accident where the data doesn't exist.
+
+Why two tiers, and why they exist alongside the tiny synthetic e2e golden
+(tier 3) and the A/B determinism test: the synthetic golden proves the
+pipeline runs correctly end-to-end on a model sized for sub-second CI
+runtime (8-wide/2-layer), and the A/B test proves the harness is
+bit-reproducible, but neither carries an oracle for what the loss or rollout
+SHOULD look like on the real model at the real data scale -- a bug that
+changes behaviour only at realistic model/data size (e.g. an off-by-one that
+only bites with 10 message-passing steps, not 2) would slip past both.
+
+**Tier 1 -- `training_golden`** (`test_training_golden.py`): N=10 steps of
+the real training loop, per-step train/valid loss vs
+`tests/golden/training_golden_tier1.json`, tolerance `rtol=atol=1e-5`
+(text-round-trip tolerance only -- CPU + `torch.use_deterministic_algorithms
+(True)` is bit-reproducible on this harness, proven by
+`test_ab_seeded_determinism.py`'s exact-equality assertion). ~2 min, CPU-
+forced (`CUDA_VISIBLE_DEVICES=""` in the subprocess env -- `meshnet/train.py`
+has no CPU-force flag of its own and always prefers CUDA when available; the
+reference was generated on CPU to match CI's CPU-only torch build, so the
+test forces CPU too even on a machine with GPUs).
+
+**Tier 2 -- `convergence_gate_nightly`** (`test_convergence_gate_nightly.py`):
+N=30 steps of real training from scratch (no resume from the published
+3M-step checkpoint), then a real rollout on a CPU-time-truncated (first 40 of
+827 frames) real D1 test trajectory, scored with
+`tests/paper_parity/gate.py`'s own `metrics()` (`mse_vx`, `rt_rmse`,
+`missed`, `false` -- same rupture-time convention, PROJECT_RULES.md rule 7:
+`SLIPRATE_THRESHOLD=0.1` m/s, `dt=0.0167777s`) against
+`tests/golden/convergence_gate_nightly_tier2.json`, `rtol=1e-4` for the
+continuous metrics and exact match for the integer counts (again a tight
+tolerance around a reproducible reference, not a statistical band -- both
+runs are CPU-forced and deterministic, unlike `gate.py`'s `REL_TOL`, which
+exists specifically to absorb GPU nondeterminism). ~6 min. At this step
+budget the model is essentially untrained, so the recorded reference is
+itself `"collapsed": true` (near-constant rollout, `var_ratio` well under
+`gate.py`'s `COLLAPSE_TOL`) -- this is an accurate, reproducible description
+of a 30-step model, not a test bug; a meaningfully-converged version of this
+tier needs a much larger step budget (see "Recommended follow-up" below).
+Marked `nightly`/`slow`: not in the fast local loop, not expected to gate
+every PR -- run it explicitly, e.g. in a scheduled nightly job.
+
+**Regenerating either reference** (deliberate, reviewed act only -- never to
+silence a failure whose cause you have not identified; say so explicitly in
+the commit message, same policy as the tier-3 golden above):
+
+```bash
+python3 tests/fixtures/training_golden/generate_tier1_reference.py
+python3 tests/fixtures/training_golden/generate_tier2_reference.py
+```
+
+**Recommended follow-up (not built this session, compute-budget-gated):** a
+release-scale tier 2 -- hundreds-to-thousands of training steps, the full
+6-trajectory/827-frame test set, GPU -- is what `PATHWAY_FORWARD.md`'s
+`test-suite-overhaul` row's "(2) New training gate" describes (~1000 steps,
+per-step loss match to ~1e-6, falsify with a perturbed lr or noise_std). This
+session's tier 2 is a real, working, smaller-scale instance of that same
+design (same metrics, same comparison style), sized to run in minutes on CPU
+in this session rather than GPU-hours; it is not a placeholder for that
+larger gate, but it is also not a substitute for it.
 
 ## What this suite deliberately does not cover (flagged, not built)
 
