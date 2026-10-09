@@ -773,3 +773,101 @@ gone (`git ls-remote` empty) -- deleted earlier this session per
 zofia-kaminska's explicit "superseded, safe to delete" verdict, which predates
 and satisfies the coordinator's "waits for Zofia" instruction; no further
 action needed, flagging the discrepancy here rather than silently dropping it.
+
+## Handoff — 2026-10-09 (conductor recycled at ~100-tool-call cap)
+
+Landed this pass (all independently re-verified by the conductor before merge,
+not trusted from subagent report alone):
+- PR #59 `206...`→training-guard VERIFIED (own CPU oracle re-run + lars-eriksson
+  audit of pre-existing PR #43 fix).
+- PR #60 `bd796c9` — PROJECT_RULES.md rule 10 (paper-parity gate output in
+  meshnet/gns PR bodies), via zofia-kaminska.
+- PR #61 — gate-enforcement row restated PARTIAL (rule 10 done, self-hosted
+  GPU runner still owner infra).
+- PR #62 `d52f463` — test-suite-overhaul sub-item (3) final slice (deleted
+  3 unused upstream `gns.*` particle tests), iris-vermeulen, re-verified via
+  fresh pytest + 3-dot diff.
+- PR #63 — board record of sub-item (3) full closure.
+- PR #64 `303466d` — fixed stale `release-gate-decisions-pending` state cell
+  (coordinator-relayed request, verified against its own row body before
+  acting).
+- PR #65 `22e2f64` — test-suite-overhaul sub-item (2): new training gate vs
+  `train.py.published` oracle (1000 steps, bit-identical pass case, falsify
+  caught), iris-vermeulen, worktree reaped after merge (stale lock
+  force-released: `agent-a9852e134af70f7cb`, pid 4102483 was the whole
+  session process not a live subagent, status already `completed`, work
+  already merged — recorded here as the explicit force-release act).
+  Independently re-verified: conductor fresh GPU1 run (211.44s, 2 passed) +
+  victor-reyes audit (independent re-run, 208.32s, 2 passed, PASS verdict,
+  0 BLOCKER/MAJOR, 5 Minor/1 Low/1 Advisory logged as non-blocking
+  follow-ups in the board row, not fixed this pass).
+- PR #66 — board record of sub-item (2) closure.
+- PR #67 `38edc30` (landed by a parallel process, confirmed ancestor of
+  `origin/main` via `git merge-base --is-ancestor`) — owner decisions on
+  release gates/experiments/housekeeping. Per explicit coordinator
+  instruction this pass, **not acted on**, only referenced: v1.2.0 tag GO
+  once gates+stranger-clone pass; batched-path tolerance loosening approved
+  (resolves `rollout-batched-oracle-gap`); Docker retire; GH200 reported-only,
+  no torch upgrade; root venv paths + 4 scratch items need moving out of
+  tree; tf32 stays opt-in; 3 experiments approved (M1 arrest+mirror, M2/M3
+  mirror, M3 batch-size sweep on GH200, parallel) — **no experiment IDs
+  assigned yet, nothing launched.** Next conductor: read PR #67 / the
+  `release-gate-decisions-pending` row in full before acting on any of this.
+
+Diagnosed, not yet enacted: `rollout_batched()` divergence on M1_D1 traj
+2/4 vs `rollout()` — lars-eriksson (haiku) concluded benign FP-reassociation
+from different PyTorch aggregation ordering on a larger concatenated graph,
+amplified by chaotic rupture, not a code bug. This reading is now consistent
+with PR #67's "batched path: looser tolerance only there" ruling but the
+tolerance change itself is NOT implemented.
+
+### Still owns (next conductor picks up here)
+
+1. **Branch `feat/gate-paper-metrics`** (worktree
+   `/home/utig5/dliu/eqgns-wt-iris-gateext`, HEAD `d178f0d`, pushed to
+   `origin/feat/gate-paper-metrics`, **not merged, no PR open**).
+   test-suite-overhaul sub-item (1): adds Mw error / slip-rate RMSE (vx,vy) /
+   final-slip RMSE to `gate.py run`, backward-compat schema-gap fix for the
+   6 reference.json entries not yet regenerated with the new keys (code
+   reviewed in full by the conductor — correct, no tolerance loosened, only
+   skips a key when absent from the reference row and reports the gap
+   visibly).
+   **Blocker before merge**: the agent (`ae4ea25e00bba9f29`) reported
+   `gate.py run --cuda 0` and `gate.py falsify --cuda 0` (no CASE args, all
+   8 cases) both ran to completion, zero KeyError, all PASS/CAUGHT as
+   expected. The conductor's own attempt to independently reproduce this
+   (gate axis 3) — `timeout 900 python3 tests/paper_parity/gate.py run
+   --cuda 0` on GPU 0 (confirmed free) — **timed out at 900s (exit 124,
+   did not complete)**, so this claim is UNCONFIRMED by an independent run
+   this session, not contradicted. Next conductor: re-run with a longer
+   wall-clock budget (background it properly, e.g. `nohup ... &` plus a
+   deadline poll, not a 900s hard cap) or per-case (`gate.py run M1_D1
+   --cuda N`, etc., summed) before merging. Do not merge on the agent's
+   report alone.
+   Also still open from sub-item (1)'s original spec: regenerating
+   `reference.json` with the paper's own code for the 6 still-unmigrated
+   cases (`M1_small`, `M2_D2`, `M2_D3` full, `M2_checkerboard`,
+   `M3_D1hypo`, `M3_D3` full) — deferred as a named non-blocking follow-up,
+   not done.
+2. **Worktree `/home/utig5/dliu/eqgns-wt-iris-gateext`** — keep until (1)
+   above is resolved (merged or abandoned); do not reap yet.
+3. **No other live agents or background jobs** at handoff — `ps` not
+   re-checked this instant but no dispatch occurred after the gate.py
+   verification attempt; `bmxm8r5ji` (the timed-out verify run) is the last
+   background job and is already completed/handled above.
+4. **Board row `test-suite-overhaul`** (P1, `OPEN (owner)`): sub-items
+   (2)/(3) now CLOSED this pass; sub-item (1) in flight per item 1 above;
+   sub-item (4) (merge `tests/README.md` + `tests/paper_parity/README.md`)
+   still deferred pending (1)'s merge, to avoid collision.
+5. **Board row `release-gate-decisions-pending`**: per PR #67 (`38edc30`),
+   now has fresh owner rulings not yet enacted anywhere in code or further
+   board rows (docker retirement, batched-tolerance loosening, venv/scratch
+   cleanup, 3 approved experiments) — read PR #67 in full before touching.
+6. **No open PRs**, main checkout clean at `38edc30` (plus this log commit
+   once landed). No tag cut this session; v1.2.0 remains untagged, gated on
+   the above per owner's GO-once-gates-pass ruling.
+
+GPU state at handoff: GPU0 free, GPU1 free, GPU2 ~99% (unrelated job),
+GPU3 free. Host CPU load was heavy (~60-70/64) for most of the session —
+kept own thread counts capped (8 each) throughout, single training process
+at a time.
