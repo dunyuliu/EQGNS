@@ -64,11 +64,19 @@ Raw data lives under git-ignored `data/` (`data/gns-sample/`, 249GB, and
 `data/dataset_archive/`); experiment outputs under `runs/<YYYYMMDD>_<slug>/`;
 throwaway work under `scratch/`. All are gitignored and stay that way. Raw
 datasets under `data/` are read-only inputs — nothing writes through them in
-place. Two ignored venvs stay at the root because their compiled extensions
-bake the path and other projects activate them by path: `venv/` and
-`venv_cotopaxi/` (moving either = a rebuild, owner-only). A root symlink
-`gns-sample -> data/gns-sample` stays until no outside script reads the old
-path (board row untracked-root-reorg).
+place. An ignored venv stays at the root because its compiled extensions
+bake the path and another project activates it by path: `venv/` (moving it =
+a rebuild, owner-only). The root `venv_cotopaxi/` also stays, but only because
+moving/deleting it is itself the owner-only rebuild this rule exists to avoid
+— it is deprecated and broken (`torch` reports `2.6.0+cpu`, no CUDA) and must
+not be used for local runs; it is kept in place, frozen, as a historical
+artifact, not as a live environment. The current local (non-TACC) GNS
+environment is `/home/staff/dliu/software_and_env/venv_gns_cotopaxi/`, built
+via the adjacent `build_venv_gns_cotopaxi.sh`, owner-managed, outside this
+repo's tree. This is a no-op for the GH200/TACC sweep work, which uses a
+remote venv on the HPC system. A root symlink `gns-sample -> data/gns-sample`
+stays until no outside script reads the old path (board row
+untracked-root-reorg).
 
 **Rationale**: multi-hundred-GB directories and generated model artifacts do
 not belong in git history; treating raw data as read-only prevents an
@@ -77,7 +85,10 @@ depends on.
 
 **How to apply**: `git check-ignore -v data runs scratch venv venv_cotopaxi`
 must report each as ignored; `python3 scripts/check_root.py` lists any
-untracked root entry outside the template (report-only).
+untracked root entry outside the template (report-only). Local (non-TACC)
+environment setup or rebuild uses
+`/home/staff/dliu/software_and_env/build_venv_gns_cotopaxi.sh`, not the root
+`venv_cotopaxi/`.
 
 ## 4. Experiments are isolated in `scratch/` and `runs/`
 
