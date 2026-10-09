@@ -58,6 +58,7 @@ a tiny synthetic dataset built on the fly by
 | 6. Training-guard tier 1 (`training_golden`) | `training_golden`, `slow` | `test_training_golden.py` | real-data, real-architecture training-path gate: N=10 steps of the real `python3 -m meshnet.train` CLI on the real, published D1 dataset (`data/gns-sample/case3.200m.homo.a.Vw/dataset/`), real M1 architecture (10 message-passing steps, 128 latent dim), per-step train/valid loss vs a committed reference, tight tolerance |
 | 7. Training-guard tier 2 (`convergence_gate_nightly`) | `convergence_gate_nightly`, `nightly`, `slow` | `test_convergence_gate_nightly.py` | small-budget (N=30 steps) real training on real D1 from scratch, then a real rollout on a CPU-time-truncated real D1 test trajectory, scored with `tests/paper_parity/gate.py`'s own metrics (`mse_vx`, `rt_rmse`, `missed`, `false`) vs a committed reference |
 | 8. Training gate vs published oracle (`training_gate`) | `training_gate`, `slow` | `test_training_gate.py` | `test-suite-overhaul` sub-item (2): current `meshnet/train.py`'s `train()` vs the frozen oracle `meshnet/train.py.published`, N=1000 steps on the real M1 D1 training data from the published starting config, per-step train/valid loss vs a reference generated from the oracle itself (GPU, `rtol=atol=1e-6`) |
+| 9. Paper-parity gate (`tests/paper_parity/`) | n/a (manual CLI, not a pytest marker except the `--paper-parity`-gated collection below) | `tests/paper_parity/gate.py` | GPU, manual, needs `data/gns-sample/`: reproduces the published GNS results (Liu & Becker 2025) to 1e-4 relative, falsify-verified; see "Paper-parity gate" below for the full command set, batched-rollout tolerance, and the final regression gate |
 
 ## Running
 
@@ -285,6 +286,203 @@ config changes, and say so in the commit message):
 ```bash
 python3 tests/fixtures/training_gate/generate_training_gate_reference.py
 ```
+
+## Paper-parity gate (tier 9, `tests/paper_parity/`)
+
+Checks that the current `meshnet` code reproduces the published GNS results
+(Liu & Becker 2025, doi:10.1029/2025JB031981). Needs `data/gns-sample/`
+(published checkpoints and test sets) and a GPU; skipped in CI. This section
+merges the former standalone `tests/paper_parity/README.md`
+(`test-suite-overhaul` sub-item (4)) -- that file is now a pointer here.
+
+```bash
+source venv/bin/activate
+python3 tests/paper_parity/gate.py quick --cuda 0   # ~1 min: every edit to meshnet/
+python3 tests/paper_parity/gate.py run --cuda 0,1,2,3   # all 7 cases in parallel, before a release
+python3 tests/paper_parity/gate.py run M1_D1 --cuda 0   # one case
+pytest tests/paper_parity --paper-parity -q         # same, via pytest
+```
+
+### How it decides
+
+Every rollout runs in torch deterministic mode (`det_rollout.py`). Without it,
+GPU kernel nondeterminism compounds over 826 autoregressive steps and swings
+some trajectories' MSE by more than 100% between identical runs, so no fixed
+tolerance separates noise from a regression. In deterministic mode reruns are
+bit-identical.
+
+- `reference.json`: per-trajectory metrics from `meshnet/train.py.published`
+  (the paper's code), deterministic (`gate.py reference`).
+- `gate.py run`: the current code must match the reference to 1e-4 relative
+  on slip-rate MSE (vx) and rupture-time RMSE / missed / false counts at 0.1 m/s
+  (`scripts/utils/plot.rupture.dynamics.py` conventions).
+- `gate.py paper`: reference vs the published rollout files (`published.json`),
+  as a sanity check that the reference itself reproduces the paper.
+- `gate.py falsify M1_D1`: scales all weights by 1.005; the gate must FAIL.
+- `gate.py quick`: the most perturbation-sensitive trajectory of each model
+  (M1_D1 #4, M2_D3 #14, M3_D3 #7), first 300 steps. `falsify --quick` confirms
+  it still catches the planted regression on all three.
+
+If the GPU, CUDA or torch version changes, regenerate `reference.json`: it
+comes from the paper's own code, so regenerating it is safe.
+
+### Batched rollout (`rollout_batched()`, `--rollout-batch-size`)
+
+```bash
+python3 tests/paper_parity/gate.py run --rollout-batch-size 15 --cuda 1              # all 8 cases, looser tolerance
+python3 tests/paper_parity/gate.py falsify M1_D1 --rollout-batch-size 15 --cuda 1     # planted x1.005 regression must FAIL
+```
+
+`--rollout-batch-size` (default 1: today's unbatched `rollout()`, `REL_TOL`
+unchanged) drives `rollout_batched()`, which concatenates multiple
+trajectories into one disjoint graph before PyTorch's `aggr='add'` message
+aggregation -- same math as the per-trajectory loop, different summation
+order, amplified by the 754-step autoregressive rollout on chaotic
+trajectories. Diagnosed BENIGN FLOAT REASSOCIATION by code audit (not a code
+bug), PATHWAY_FORWARD.md board row `rollout-batched-oracle-gap`. Owner
+decision (`release-gate-decisions-pending` item (3), 2026-10-09): accept a
+looser tolerance for the batched path only; the default batch=1 path keeps
+`REL_TOL=1e-4`.
+
+`REL_TOL_BATCHED = 1e-1` (`gate.py`), batch_size>1 only. Set from a fresh
+measurement (2026-10-09, batch=15, all 8 gated cases vs `reference.json` /
+the M1_large published-rollout reference): worst-case relative delta among
+trajectories *not* already excluded elsewhere as known chaotic bifurcations
+(same cases `regression_ok()` already excludes for an unrelated gate --
+`M2_D3` entirely, `M3_D3` traj 7) was M3_D3 traj 8 at 0.0413; the
+originally-diagnosed M1_D1 traj 4 measured 0.0309. `REL_TOL_BATCHED` = 2x
+that worst-case, rounded up to the next power of ten (0.0826 -> 1e-1).
+Falsify acceptance check (weights x1.005, M1_D1, batch=15): CAUGHT at this
+tolerance, 4/6 trajectories FAIL by a wide margin (e.g. missed 0->54, mse_vx
+1.150->0.810) -- no tightening needed.
+
+**`gate.py run --rollout-batch-size 15` is deliberately not all-green even
+after this fix** -- two categories of trajectory legitimately still FAIL,
+on purpose, because `compare()` has no exclusion mechanism and their
+divergence does not fit the benign-reassociation story folded into
+`REL_TOL_BATCHED`:
+  - `M2_D3` (all trajectories, up to 155x relative delta on `missed`) and
+    `M3_D3` traj 7 (0.737x): the same pre-existing chaotic-bifurcation cases
+    already excluded from `regression_ok()` elsewhere -- consistent with
+    known behavior, not new, reported here rather than silently gated around.
+  - `M2_checkerboard` traj 1 (mse_vx 0.568->9.39, 8.8x): a **new finding**,
+    measured 2026-10-09. Its own eager-vs-eager noise floor (independently
+    measured the same session, two non-deterministic runs) is under 1%
+    (0.562-0.568), so this divergence is NOT ordinary chaotic/eager noise and
+    does not fit the benign-reassociation story that motivates
+    `REL_TOL_BATCHED`. Owner-decision-pending (board row
+    `m2-checkerboard-chaos-exclusion-decision`): a second, independent
+    investigation (2026-10-09) refuted the initial "deterministic indexing
+    bug" read -- the dataset has exactly 2 trajectories, so "identical
+    across batch sizes" is a trivial consequence of grouping, not evidence
+    either way -- and traced the divergence to a genuine chaotic
+    rupture-path bifurcation (bit-exact up to a ~1e-6 reassociation seed,
+    then a monotonic, non-resynchronizing split), same mechanism class as
+    `M2_D3`/`M3_D3` traj 7, not a code bug. Not folded into this tolerance
+    and not silently excluded from the gate until the owner's exclusion-list
+    decision lands on the board.
+
+### Cases
+
+| Case | Model | Test set |
+|---|---|---|
+| `M1_D1`, `M1_small` | M1 (D1, 3M steps) | D1 hypocenters; 10 x 5 km fault |
+| `M2_D2`, `M2_D3`, `M2_checkerboard` | M2 (D2, 30 scenarios, 3M) | unseen asperity stress; fractal stress; checkerboard |
+| `M3_D3`, `M3_D1hypo` | M3 (D2, 148 scenarios, 2.7M) | fractal stress; D1 hypocenter cross-test |
+
+Checkpoints are byte-identical (CRC32) to the Zenodo archive
+(doi:10.5281/zenodo.17095311). The 40 km fault case is not gated: its test set
+is not on disk.
+
+### Fast opt-in tier (`--rollout_fast`)
+
+```bash
+python3 tests/paper_parity/gate.py fast --precision tf32 --cuda 0              # full M1_D1/M2_D3/M3_D3 test sets
+python3 tests/paper_parity/gate.py fast --precision fp16 --falsify --cuda 0    # planted x1.005 regression must FAIL
+```
+
+`--cuda` has no default (CI simplification, 2026-10-09): earlier versions of both
+`gate.py` and `measure_vs_published.py` defaulted to GPU 0, which silently landed
+GPU-heavy gate runs on whichever device happened to be device 0 on a shared box --
+a real contamination hazard, not just a style nit (an unrelated foreign job on GPU0
+repeatedly collided with gate runs during the `test-suite-overhaul` measurement
+pass). `--cuda` is now a required flag on both scripts' CLI entry points; the
+pytest-invoked paths (`test_paper_parity.py`, which calls `gate.fresh_rollout()`/
+`gate.cmd_falsify()` directly, not through `main()`) are unaffected.
+
+Judges `meshnet/fast_rollout.py` (see `docs/user/rollout_and_analysis.md`) against the
+same `reference.json`, band `FAST_TOL = {rt_rmse: 1.05x, missed+false: 2.0x, mse_vx: 1.5x}`
+(`gate.py`) rather than the 1e-4 exact match `gate.py run` uses, since the fast path's
+rounding is not bit-identical and the rollout is chaotic. **This ratio-vs-EQdyna-truth band is
+provisional/informational, not the final gate.** The owner wants the fast-tier gate redefined as
+a direct regression check against the deterministic reference rollout itself (not EQdyna truth):
+rupture-time RMSE in seconds (target ~2 dt, dt=0.0168s), Mw error, and peak-normalized slip-rate
+RMSE, with thresholds set from a measured per-trajectory distribution across all 8 cases (fast
+tf32/fp32 vs reference, and eager-vs-eager for the noise floor). Implemented below as `gate.py
+regression` -- see "The final gate" section.
+
+Measured 2026-10-08, idle GPU 1, deterministic:
+
+| precision | M1_D1 | M2_D3 | M3_D3 | verdict |
+|---|---|---|---|---|
+| fp32 | rt 0.3518/0.3518, m+f 4589/4589, mse_vx 0.543/0.542 | rt 0.318/0.341, m+f 236/147, mse_vx 1.23/1.50 | rt 0.272/0.272, m+f 38/38, mse_vx 0.619/0.790 | **PASS all 3** |
+| tf32 | rt 0.347/0.352, m+f 4589/4589, mse_vx 0.518/0.542 | rt 0.338/0.341, m+f 234/147, mse_vx 1.35/1.50 | rt 0.274/0.272, m+f 38/38, mse_vx 0.625/0.790 | **PASS all 3** |
+| fp16 | PASS | mse_vx 3.581/1.50 | PASS | FAIL (M2_D3 mse_vx) |
+| bf16 | PASS | rt_rmse 0.391/0.341 | rt_rmse 0.287/0.272 | FAIL (M2_D3, M3_D3 rt_rmse) |
+
+`current/reference` per case; `m+f` = missed+false trajectory count. Eager (flag off)
+run-to-run noise on M2_D3 mse_vx was 0.85 and 1.73 against a 1.50 reference in separate
+runs, so fp16's 3.58 is a real regression, not noise. `--falsify --precision fp16`
+(weights x1.005) is CAUGHT on M1_D1 and M2_D3 but PASSes on M3_D3 alone -- the gate runs
+all 3 cases for exactly this reason; no single case is sufficient.
+
+No precision has an owner-approved default yet; `tf32` is the only one passing the
+current band on every case. `gate.py run` (flag off) is unaffected and passed all 8
+cases in the same session.
+
+### The final gate (`gate.py regression`)
+
+```bash
+python3 tests/paper_parity/gate.py regression --precision tf32 --cuda 0              # all 7 non-truncated cases
+python3 tests/paper_parity/gate.py regression --precision tf32 --falsify --cuda 0    # planted x1.005 regression must FAIL
+```
+
+Implements the redesign above: per trajectory, delta RT RMSE (s), delta Mw, and
+missed+false between the fast/eager rollout and a freshly generated deterministic
+rollout of the PUBLISHED code (same construction as `reference.json`, just not
+cached -- this gate needs raw per-trajectory arrays, not `reference.json`'s
+aggregated summaries). Math reused from `measure_vs_published.py`'s
+`compare_pair()`/`fresh_raw_rollout()`, not redefined (`PROJECT_RULES.md` rule 7).
+
+Owner-approved thresholds (`PATHWAY_FORWARD.md` `release-gate-decisions-pending`
+row (a), 2026-10-09), uniform across eager/fast-fp32/fast-tf32 and every case:
+delta RT RMSE &lt;= 4 dt (dt = 0.0167777 s); |delta Mw| &lt;= 0.03; missed+false = 0.
+`--tier tight` (3 dt / 0.02) is the owner's specified fallback if the falsify
+acceptance check passes under the default tier. `M2_D3` (all trajectories) and
+`M3_D3` trajectory 7 are reported but excluded from the pass/fail decision (same
+owner decision; see `gate.regression_ok()`'s `REGRESSION_EXCLUDE_*`).
+
+**Status**: implemented and unit-tested (`test_regression_gate_logic.py`, pure
+threshold/exclusion logic, no GPU), merged as PR #46 (`bb9f840`). GPU falsify
+acceptance check run and CAUGHT on `M1_D1` only (weights x1.005, default tier:
+4/6 trajectories FAIL, dRT up to 1.13s vs the 0.067s threshold, dMw up to
+0.125) -- the other 5 gated cases (`M1_small`, `M2_D2`, `M2_checkerboard`,
+`M3_D3`, `M3_D1hypo`) are NOT yet independently re-run under this gate, an
+open, non-blocking follow-up (`PATHWAY_FORWARD.md`
+`release-gate-decisions-pending` row (a)). Also added since: Mw error,
+slip-rate RMSE (both components), and final-slip RMSE metrics on `gate.py run`
+itself (PR #71, `443eab7`), and `REL_TOL_BATCHED` for the
+`--rollout-batch-size` path (PR #70, `1c085ae`) -- see "Batched rollout" above.
+
+### Dataset padding
+
+The prepared test sets end each scenario with 72 padded frames (steps 755-826:
+zero velocity, invalid `node_coords`/`cells`/`node_property`). The published
+code rebuilds the graph each step and so reads them; the current code caches
+the step-0 mesh. Both are bit-identical over steps 0-754, so metrics use only
+the unpadded steps (`valid_steps` in `gate.py`). Including the padded frames
+dilutes MSE by 826/755 (about 9%), since both predictions and ground truth are
+near zero there.
 
 ## What this suite deliberately does not cover (flagged, not built)
 
