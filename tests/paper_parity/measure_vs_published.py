@@ -314,7 +314,7 @@ def to_markdown(all_rows):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--cuda", default="0", help="single GPU id -- never parallelized here")
+    ap.add_argument("--cuda", required=True, help="single GPU id -- never parallelized here; no default, pick explicitly (GPU0 often hosts unrelated jobs on this box)")
     ap.add_argument("--cases", nargs="*", default=CASES_FOR_TABLE,
                     help=f"default: all of {CASES_FOR_TABLE}")
     ap.add_argument("--row-types", nargs="*",

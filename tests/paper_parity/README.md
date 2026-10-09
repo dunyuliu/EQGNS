@@ -7,9 +7,9 @@ Checks that the current `meshnet` code reproduces the published GNS results
 
 ```bash
 source venv/bin/activate
-python3 tests/paper_parity/gate.py quick            # ~1 min: every edit to meshnet/
+python3 tests/paper_parity/gate.py quick --cuda 0   # ~1 min: every edit to meshnet/
 python3 tests/paper_parity/gate.py run --cuda 0,1,2,3   # all 7 cases in parallel, before a release
-python3 tests/paper_parity/gate.py run M1_D1        # one case
+python3 tests/paper_parity/gate.py run M1_D1 --cuda 0   # one case
 pytest tests/paper_parity --paper-parity -q         # same, via pytest
 ```
 
@@ -53,9 +53,18 @@ is not on disk.
 ## Fast opt-in tier (`--rollout_fast`)
 
 ```bash
-python3 tests/paper_parity/gate.py fast --precision tf32              # full M1_D1/M2_D3/M3_D3 test sets
-python3 tests/paper_parity/gate.py fast --precision fp16 --falsify    # planted x1.005 regression must FAIL
+python3 tests/paper_parity/gate.py fast --precision tf32 --cuda 0              # full M1_D1/M2_D3/M3_D3 test sets
+python3 tests/paper_parity/gate.py fast --precision fp16 --falsify --cuda 0    # planted x1.005 regression must FAIL
 ```
+
+`--cuda` has no default (CI simplification, 2026-10-09): earlier versions of both
+`gate.py` and `measure_vs_published.py` defaulted to GPU 0, which silently landed
+GPU-heavy gate runs on whichever device happened to be device 0 on a shared box --
+a real contamination hazard, not just a style nit (an unrelated foreign job on GPU0
+repeatedly collided with gate runs during the `test-suite-overhaul` measurement
+pass). `--cuda` is now a required flag on both scripts' CLI entry points; the
+pytest-invoked paths (`test_paper_parity.py`, which calls `gate.fresh_rollout()`/
+`gate.cmd_falsify()` directly, not through `main()`) are unaffected.
 
 Judges `meshnet/fast_rollout.py` (see `docs/user/rollout_and_analysis.md`) against the
 same `reference.json`, band `FAST_TOL = {rt_rmse: 1.05x, missed+false: 2.0x, mse_vx: 1.5x}`
