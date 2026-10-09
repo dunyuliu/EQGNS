@@ -1,6 +1,6 @@
 # Rollout speed: what was measured, what to do
 
-Measured 2026-10-08 in a private derivative project that runs this repo's `meshnet` rollout
+Measured 2026-10-08 with this repo's `meshnet` rollout
 (`predict_velocity` in a loop over a static graph, batched disjoint graph as in
 `rollout_batched`): 3D mesh, ~30k nodes / ~130k edges per trajectory, 10 message-passing layers,
 latent 128, 1726 rollout steps, one idle A100 40 GB, torch 2.9.1. Batch of 5 trajectories.
