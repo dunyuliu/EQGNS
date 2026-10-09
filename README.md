@@ -86,5 +86,5 @@ the user guide:
 ## Reproducing the paper
 
 - The exact code and dataset archived at publication are on Zenodo: https://doi.org/10.5281/zenodo.17095311
-- `meshnet/train.py.published` is a snapshot of `meshnet/train.py` as used for the paper; the current `meshnet/train.py` adds inference-speed optimizations that are mathematically equivalent (see `docs/dev/ROLLOUT_SPEED.md`).
+- `meshnet/train.py.published` is a snapshot of `meshnet/train.py` as used for the paper; the current `meshnet/train.py` adds inference-speed optimizations that are mathematically equivalent (see "Rollout speed: measurements and lessons" in `docs/user/rollout_and_analysis.md`).
 - `requirements.txt` is the single, pinned environment manifest; `scripts/build_venv.sh` / `scripts/build_venv_frontera.sh` build venvs on local servers and TACC Frontera respectively.

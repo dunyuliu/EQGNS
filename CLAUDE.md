@@ -20,4 +20,5 @@ Earth* (doi:10.1029/2025JB031981). Start at [README.md](README.md).
 
 Follow `PROJECT_RULES.md` for commit style, what never gets committed, and
 where experiments live. Anything about the historical `rollout()` speed
-optimizations belongs in `docs/dev/ROLLOUT_SPEED.md`, not here.
+optimizations belongs in `docs/user/rollout_and_analysis.md` (under
+"Rollout speed: measurements and lessons"), not here.
