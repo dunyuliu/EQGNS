@@ -1,6 +1,6 @@
 # Session log — test-suite-overhaul — 2026-10-08
 
-Not committed yet; working notes for this conductor pass. Board row: `test-suite-overhaul`
+Working notes for this conductor pass (tracked in-repo). Board row: `test-suite-overhaul`
 (PATHWAY_FORWARD.md), owner iris-vermeulen, own worktree, own PR after rollout-compile-optin
 (now VERIFIED/merged, PR #29/#30 landed — confirmed via `git pull --ff-only` fast-forwarding
 7cf3d03 -> a64c2c0, 4 commits).
