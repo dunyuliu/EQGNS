@@ -5,5 +5,4 @@
 * [Data preparation](user/data_preparation.md)
 * [Training](user/training.md)
 * [Rollout and analysis](user/rollout_and_analysis.md)
-* [Batched rollout](user/ROLLOUT_BATCHING.md)
 * [Inverse problem example](user/example-1.md)

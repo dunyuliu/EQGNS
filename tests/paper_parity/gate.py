@@ -13,6 +13,8 @@ M3 model-2700000.pt).
   gate.py extract [CASE ...]    rebuild published.json from the published rollouts
   gate.py falsify M1_D1         planted regression (weights x1.005) must FAIL
   gate.py quick                 ~3 min: one sensitive trajectory per model, 300 steps
+  gate.py fast [CASE ...]       opt-in --rollout_fast path: full test sets within the FAST_* band
+  (fast takes --precision; add --falsify for its planted regression, which must FAIL)
   (add --quick to reference/falsify for the quick-tier variant)
 
 All rollouts run in torch deterministic mode (det_rollout.py), which makes
@@ -66,6 +68,13 @@ QUICK_STEPS = 300
 KEYS = ["mse_vx", "rt_rmse", "missed", "false"]
 REL_TOL = 1e-4          # current vs published code: float reassociation only
 COLLAPSE_TOL = 0.5      # var(pred)/var(gt) below this: flat/degenerate forecast (owner-set, do not tune)
+# fast tier (--rollout_fast): rounding differs from the default path and the chaotic rollout
+# amplifies it, so no per-trajectory match; per case, vs reference.json, the mean rt_rmse, the
+# missed+false count and the mean mse_vx may not grow past these factors. Set 2026-10-08 from the
+# run-to-run spread of two nondeterministic eager rollouts (mean rt_rmse <=1.00x, missed+false
+# <=1.52x, mse_vx <=1.15x the reference, over M1_D1/M2_D3/M3_D3; docs/dev/ROLLOUT_SPEED.md).
+FAST_CASES = ["M1_D1", "M2_D3", "M3_D3"]
+FAST_TOL = {"rt_rmse": 1.05, "missed+false": 2.0, "mse_vx": 1.5}
 
 M1 = ("models.nmp10.cotopaxi", 3000000)
 M2 = ("models.nmp10.cotopaxi", 3000000)
@@ -173,12 +182,13 @@ def write_quick_npz(src, dst, traj):
     np.savez(dst, trajectory0={k: np.asarray(v)[:QUICK_STEPS + 1] for k, v in t.items()})
 
 
-def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False, n_overrides=None):
+def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False, n_overrides=None,
+                extra=()):
     """Deterministic rollout of one case with `code`; return per-trajectory metrics.
 
     n_overrides: optional per-trajectory step-count list (same order as
     pkls_in(out_dir)) passed to metrics() as n_override; None (default) for
-    every case except TRUNCATE_TO_PUBLISHED."""
+    every case except TRUNCATE_TO_PUBLISHED. extra: further train.py flags."""
     ds, npz, (mdir, step), _ = CASES[case]
     model_dir = model_dir or DATA / ds / mdir
     dataset_dir = REGEN_DATASET_DIR.get(case, DATA / ds / "dataset")
@@ -190,7 +200,7 @@ def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False
         cmd = [sys.executable, str(HERE / "det_rollout.py"), code, "--mode=rollout",
                f"--data_path={data_dir}/", f"--model_path={model_dir}/",
                f"--output_path={out_dir}/", f"--model_file=model-{step}.pt",
-               f"--train_state_file=train_state-{step}.pt", f"--cuda_device_number={cuda}"]
+               f"--train_state_file=train_state-{step}.pt", f"--cuda_device_number={cuda}", *extra]
         r = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
         if r.returncode:
             sys.exit(f"[{case}] rollout failed:\n{r.stderr[-3000:]}")
@@ -202,9 +212,9 @@ def run_rollout(case, out_dir, cuda, model_dir=None, code="current", quick=False
     return out
 
 
-def fresh_rollout(case, cuda, model_dir=None, code="current", quick=False, n_overrides=None):
+def fresh_rollout(case, cuda, model_dir=None, code="current", quick=False, n_overrides=None, extra=()):
     with tempfile.TemporaryDirectory() as out:
-        return run_rollout(case, out, cuda, model_dir, code, quick, n_overrides)
+        return run_rollout(case, out, cuda, model_dir, code, quick, n_overrides, extra)
 
 
 def ref_key(case, quick):
@@ -247,6 +257,24 @@ def compare(case, current, ref, rel_tol=REL_TOL, quiet=False):
             print(f"  [{case}] traj {i}: {'PASS' if not bad else 'FAIL ' + '; '.join(bad)}"
                   f" (var_ratio={cur.get('var_ratio', float('nan')):.3g})")
     return ok
+
+
+def aggregate(rows):
+    return {"rt_rmse": float(np.mean([r["rt_rmse"] for r in rows])),
+            "missed+false": sum(r["missed"] + r["false"] for r in rows),
+            "mse_vx": float(np.mean([r["mse_vx"] for r in rows]))}
+
+
+def compare_band(case, current, ref):
+    """Fast tier: case aggregates within FAST_TOL of the reference, nothing collapsed."""
+    cur, r = aggregate(current), aggregate(ref)
+    bad = [f"{k} {r[k]:.4g}->{cur[k]:.4g} (> x{tol})" for k, tol in FAST_TOL.items()
+           if cur[k] > tol * r[k] + (1 if k == "missed+false" else 0)]
+    bad += [f"traj {i} collapsed" for i, row in enumerate(current) if row["collapsed"]]
+    bad += [] if len(current) == len(ref) else [f"{len(current)} trajectories, reference {len(ref)}"]
+    print(f"  [{case}] " + "  ".join(f"{k} {cur[k]:.4g}/{r[k]:.4g}" for k in FAST_TOL)
+          + f"  {'PASS' if not bad else 'FAIL ' + '; '.join(bad)}")
+    return not bad
 
 
 def load(path):
@@ -322,45 +350,75 @@ def cmd_paper(cases):
               f" {med(reference[c], 'rt_rmse'):11.4g}/{med(published[c], 'rt_rmse'):<11.4g}")
 
 
-def cmd_falsify(case, cuda, scale=1.005, quick=False):
-    """Scale every weight by `scale`; the gate must FAIL on the result."""
+def scaled_model(case, tmp, scale):
+    """Copy the case's checkpoint into tmp with every weight scaled by `scale`."""
     ds, _, (mdir, step), _ = CASES[case]
     src = DATA / ds / mdir
+    shutil.copy(src / "config.json", tmp)
+    shutil.copy(src / f"train_state-{step}.pt", tmp)
+    ckpt = torch.load(src / f"model-{step}.pt", map_location="cpu")
+    state = ckpt["model"] if "model" in ckpt else ckpt
+    for k, v in state.items():
+        if torch.is_floating_point(v):
+            state[k] = v * scale
+    torch.save(ckpt, tmp / f"model-{step}.pt")
+    return tmp
+
+
+def cmd_falsify(case, cuda, scale=1.005, quick=False):
+    """Scale every weight by `scale`; the gate must FAIL on the result."""
     if case in TRUNCATE_TO_PUBLISHED:
         ref_rows, n_overrides = published_reference(case)
     else:
         ref_rows, n_overrides = load(REFERENCE)[ref_key(case, quick)], None
     with tempfile.TemporaryDirectory() as tmp:
-        tmp = Path(tmp)
-        shutil.copy(src / "config.json", tmp)
-        shutil.copy(src / f"train_state-{step}.pt", tmp)
-        ckpt = torch.load(src / f"model-{step}.pt", map_location="cpu")
-        state = ckpt["model"] if "model" in ckpt else ckpt
-        for k, v in state.items():
-            if torch.is_floating_point(v):
-                state[k] = v * scale
-        torch.save(ckpt, tmp / f"model-{step}.pt")
-        current = fresh_rollout(case, cuda, tmp, quick=quick, n_overrides=n_overrides)
+        model_dir = scaled_model(case, Path(tmp), scale)
+        current = fresh_rollout(case, cuda, model_dir, quick=quick, n_overrides=n_overrides)
     caught = not compare(case, current, ref_rows, quiet=True)
     print(f"planted regression (weights x{scale}) {'CAUGHT' if caught else 'MISSED'}")
     return caught
 
 
+def cmd_fast(cases, gpus, precision, falsify=False, scale=1.005):
+    """--rollout_fast on the full test sets, judged by compare_band; with falsify, on weights
+    scaled by `scale`, where the band must FAIL (else it is too loose to mean anything)."""
+    reference = load(REFERENCE)
+    extra = (f"--rollout_fast={precision}", "--rollout_batch_size=64")
+
+    def roll(case, gpu):
+        if not falsify:
+            return fresh_rollout(case, gpu, extra=extra)
+        with tempfile.TemporaryDirectory() as tmp:
+            return fresh_rollout(case, gpu, scaled_model(case, Path(tmp), scale), extra=extra)
+    t0 = time.time()
+    rollouts = parallel(roll, cases, gpus)
+    print(f"fast {precision}{f' falsify x{scale}' if falsify else ''}: {len(cases)} cases in {time.time() - t0:.0f} s")
+    ok = [compare_band(c, rollouts[c], reference[c]) for c in cases]
+    if falsify:
+        print(f"planted regression (weights x{scale}) {'CAUGHT' if not all(ok) else 'MISSED'}")
+        return not all(ok)
+    return all(ok)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["run", "quick", "reference", "paper", "extract", "falsify"])
+    ap.add_argument("command", choices=["run", "quick", "reference", "paper", "extract", "falsify", "fast"])
     ap.add_argument("cases", nargs="*", help=f"default: all of {list(CASES)}")
     ap.add_argument("--cuda", default="0", help="GPU id(s), comma-separated; cases run in parallel")
     ap.add_argument("--quick", action="store_true", help="quick-tier variant")
+    ap.add_argument("--precision", default="fp16", help="fast tier: --rollout_fast value")
+    ap.add_argument("--falsify", action="store_true", help="fast tier: planted regression must FAIL")
     a = ap.parse_args()
     gpus = [int(g) for g in a.cuda.split(",")]
     quick = a.quick or a.command == "quick"
-    cases = a.cases or (list(QUICK) if quick else list(CASES))
+    cases = a.cases or (list(QUICK) if quick else FAST_CASES if a.command == "fast" else list(CASES))
     unknown = set(cases) - set(CASES)
     if unknown or (quick and set(cases) - set(QUICK)):
         sys.exit(f"unknown case(s) for this tier: {sorted(set(cases) - set(QUICK if quick else CASES))}")
     if a.command in ("run", "quick"):
         sys.exit(0 if cmd_run(cases, gpus, quick) else 1)
+    if a.command == "fast":
+        sys.exit(0 if cmd_fast(cases, gpus, a.precision, a.falsify) else 1)
     if a.command == "extract":
         cmd_extract(cases)
     if a.command == "reference":

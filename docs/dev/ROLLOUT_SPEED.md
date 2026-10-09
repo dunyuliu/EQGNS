@@ -1,5 +1,8 @@
 # Rollout speed: what was measured, what to do
 
+Two measurements: a 3D mesh (below) and the 2D paper models (`## 2D paper models`), which led
+to the opt-in `--rollout_fast` path (`meshnet/fast_rollout.py`).
+
 Measured 2026-10-08 with this repo's `meshnet` rollout
 (`predict_velocity` in a loop over a static graph, batched disjoint graph as in
 `rollout_batched`): 3D mesh, ~30k nodes / ~130k edges per trajectory, 10 message-passing layers,
@@ -38,3 +41,45 @@ saturates the GPU, so batching buys little; it matters for small graphs (e.g. th
    `gns.graph_network.EncodeProcessDecode.forward` in `torch.compile` + `torch.autocast(bf16)` and
    then `runpy.run_module("meshnet.train")` leaves `meshnet/` and checkpoints untouched (rule 1),
    so it stays opt-in and out of the paper-parity gate.
+
+## 2D paper models: `--rollout_fast`
+
+Measured 2026-10-08 on the M1-M3 checkpoints (`tests/paper_parity/gate.py` CASES): ~4.7k nodes /
+~28k edges per trajectory, 826 steps, one idle A100 (GPU 1), torch 2.9.1.
+
+`--rollout_fast {fp32,tf32,fp16,bf16}` (default `off`) runs `meshnet/fast_rollout.py`: same math
+as `predict_velocity` on the static graph, with normalizers, one-hot and the edge encoder folded
+into constants, the edge MLP's first layer factorized per node, edges laid out as (node, in-degree
+slot) so aggregation is a fixed-order masked sum (no scatter, deterministic), `torch.compile`, and
+the whole step captured as one CUDA graph.
+
+ms / step / trajectory (min of 3 x 200 steps; the factorized path with `index_add_`
+aggregation; the slot layout replaced it after these timings and is not yet timed):
+
+| variant | batch 1 | batch 6 (M1_D1) | batch 15 (M2_D3) |
+|---|---|---|---|
+| eager fp32 (default path) | 10.1 | 8.06 | 7.77 |
+| eager TF32 | 6.4 | 4.32 | 4.23 |
+| fast tf32 | 1.88 | 1.87 | 1.86 |
+| fast fp16 | 1.83 | | |
+| fast bf16 | 1.81 | 1.46 | 1.37 |
+
+So ~5.4x (tf32) to ~5.5x (fp16, batch 1) over eager; most of it is the CUDA graph plus compile,
+which on these small graphs removes launch overhead that dominates (unlike the 3D case above).
+Once graphed, batching adds little. `max-autotune` compile gains a further ~15% at a ~30 s
+warm-up per graph shape; not exposed.
+
+Accuracy, full test sets (outcome metrics, `gate.metrics`), against the deterministic
+`reference.json` and two nondeterministic eager runs (the noise floor): mean rt_rmse per case
+
+| case | reference | eager runs | fast fp32 | fast tf32 | fast fp16 | fast bf16 |
+|---|---|---|---|---|---|---|
+| M1_D1 | 0.352 | 0.352, 0.352 | 0.352 | 0.347 | 0.343 | 0.339 |
+| M2_D3 | 0.341 | 0.331, 0.337 | 0.326 | 0.304 | 0.318 | **0.398** |
+| M3_D3 | 0.272 | 0.272, 0.272 | 0.272 | 0.274 | 0.274 | **0.287** |
+
+The table above is a pointwise rt_rmse spot-check (small sample), superseded by the full-test-set
+deterministic gate. **Use `--rollout_fast tf32`** (fp32 also passes; fp16 and bf16 fail the gate
+on at least one case) — see `docs/user/rollout_and_analysis.md` for the recommendation and
+`tests/paper_parity/README.md` for the full per-case gate results and `gate.py fast` usage; this
+page is not the place to duplicate them.
