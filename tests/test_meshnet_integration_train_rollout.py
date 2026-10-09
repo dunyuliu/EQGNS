@@ -230,3 +230,44 @@ def test_batched_rollout_matches_per_trajectory_rollout(tiny_simulator, dataset_
         assert (s["ground_truth_rollout"] == b["ground_truth_rollout"]).all()
         torch.testing.assert_close(torch.as_tensor(b["predicted_rollout"]),
                                    torch.as_tensor(s["predicted_rollout"]), rtol=1e-5, atol=1e-6)
+
+
+def _fast_vs_reference(simulator, dataset_dir, device, **fast_kwargs):
+    from meshnet.fast_rollout import rollout_fast
+    torch.manual_seed(0)
+    _warm_normalizers(simulator, dataset_dir)
+    simulator.to(device)
+    for norm in (simulator._node_normalizer, simulator._output_normalizer):  # plain tensor attributes
+        for k, v in vars(norm).items():
+            if isinstance(v, torch.Tensor):
+                setattr(norm, k, v.to(device))
+    train_mod.INPUT_SEQUENCE_LENGTH = TINY_CONFIG["INPUT_SEQUENCE_LENGTH"]
+    train_mod.dt = TINY_CONFIG["dt"]
+    group = list(data_loader.get_data_loader_by_trajectories(path=str(dataset_dir / "train.npz")))[:3]
+    nsteps = len(group[0][0]) - train_mod.INPUT_SEQUENCE_LENGTH
+    with torch.no_grad():
+        ref = train_mod.rollout_batched(simulator, group, nsteps, device=device)
+        fast = rollout_fast(simulator, group, nsteps, device, dt=train_mod.dt, **fast_kwargs)
+    moved = max(abs(r["predicted_rollout"] - r["initial_velocities"]).max() for r in ref)
+    assert moved > 1e-3, moved
+    assert len(fast) == len(ref)
+    for r, f in zip(ref, fast):
+        assert set(r) == set(f)
+        for key in ("ground_truth_rollout", "initial_velocities", "node_coords", "node_types", "node_property"):
+            assert (r[key] == f[key]).all(), key
+        torch.testing.assert_close(torch.as_tensor(f["predicted_rollout"]),
+                                   torch.as_tensor(r["predicted_rollout"]), rtol=1e-4, atol=1e-5)
+
+
+def test_fast_rollout_matches_batched_rollout_cpu(tiny_simulator, dataset_dir):
+    """meshnet/fast_rollout.py restructures the GNN (folded normalizers, cached edge encoder,
+    factorized first edge layer); in fp32 it must reproduce rollout_batched() up to reassociation."""
+    _fast_vs_reference(tiny_simulator, dataset_dir, torch.device("cpu"),
+                       precision="fp32", compile=False, cuda_graph=False)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
+def test_fast_rollout_compiled_graphed_matches_cuda(tiny_simulator, dataset_dir):
+    """Same, with torch.compile and the per-step CUDA graph (fp32)."""
+    _fast_vs_reference(tiny_simulator, dataset_dir, torch.device("cuda"),
+                       precision="fp32", compile=True, cuda_graph=True)

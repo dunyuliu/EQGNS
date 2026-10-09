@@ -18,6 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from meshnet import data_loader
 from meshnet import learned_simulator
 from meshnet import seeding
+from meshnet.fast_rollout import rollout_fast
 from meshnet.noise import get_velocity_noise
 from meshnet.utils import datas_to_graph
 from meshnet.utils import NodeType
@@ -47,6 +48,10 @@ flags.DEFINE_integer('rollout_batch_size', 1, help=(
     'Default 1: the original one-trajectory-at-a-time path, bit-identical to before. '
     '>1: same math per trajectory, but rounding differs and long rollouts can diverge during '
     'active rupture; use for evaluation, not for the paper-parity gate (docs/user/ROLLOUT_BATCHING.md).'))
+flags.DEFINE_enum('rollout_fast', 'off', ['off', 'fp32', 'tf32', 'bf16'], help=(
+    'Opt-in fast rollout (meshnet/fast_rollout.py): static-graph restructured GNN, torch.compile and '
+    'a CUDA graph per step, with fp32 / tf32 / bf16 matmuls. Default off: the original path. '
+    'Rounding differs, so use for evaluation, not for the paper-parity gate (docs/dev/ROLLOUT_SPEED.md).'))
 flags.DEFINE_boolean('deterministic', False, help=(
     'Only meaningful with --seed set. Additionally asks torch for deterministic kernels '
     '(warn-only); see meshnet/seeding.py:set_deterministic.'))
@@ -99,7 +104,7 @@ def predict(simulator: learned_simulator.MeshSimulator,
 
     # Rollout
     with torch.no_grad():
-        if FLAGS.rollout_batch_size <= 1:
+        if FLAGS.rollout_batch_size <= 1 and FLAGS.rollout_fast == 'off':
             for i, features in enumerate(ds):
                 nsteps = len(features[0]) - INPUT_SEQUENCE_LENGTH
                 prediction_data = rollout(simulator, features, nsteps, device)
@@ -114,7 +119,13 @@ def predict(simulator: learned_simulator.MeshSimulator,
                        and len(examples[i + len(group)][0]) == len(group[0][0])):
                     group.append(examples[i + len(group)])
                 nsteps = len(group[0][0]) - INPUT_SEQUENCE_LENGTH
-                for k, prediction_data in enumerate(rollout_batched(simulator, group, nsteps, device)):
+                if FLAGS.rollout_fast == 'off':
+                    outputs = rollout_batched(simulator, group, nsteps, device)
+                else:
+                    if INPUT_SEQUENCE_LENGTH != 1:
+                        raise ValueError('--rollout_fast needs INPUT_SEQUENCE_LENGTH == 1')
+                    outputs = rollout_fast(simulator, group, nsteps, device, precision=FLAGS.rollout_fast, dt=dt)
+                for k, prediction_data in enumerate(outputs):
                     report(i + k, prediction_data)
                 i += len(group)
 
