@@ -13,6 +13,7 @@ maintenance + new-experiment mode.
 4. Experiments are isolated in `scratch/` and `runs/`
 5. Docs must match the drivers they document
 6. Remotes and commit style
+6a. Merge only after the status check concludes
 7. Rupture-analysis conventions are stated explicitly
 8. One `requirements.txt`, every entry pinned with `==`
 9. A curated root — the template is the target, not the status quo
@@ -120,6 +121,29 @@ unambiguous when pulling from `upstream`.
 
 **How to apply**: `git remote -v` shows exactly these two remotes at these
 URLs; `git log --oneline -20` subjects read as imperative commands.
+
+## 6a. Merge only after the status check concludes
+
+Before merging any PR, wait for the actual conclusion of the required status
+check -- `gh run watch <run-id> --exit-status` -- never merge on a bare "no
+pending checks" read: that read is indistinguishable from a check that has
+not started yet. `gh pr merge --auto --squash` is safe to use for this exact
+reason: `main`'s branch protection (enabled 2026-10-09, owner decision,
+verbatim "8 yes") makes `pytest` (strict mode) a required status check, so
+GitHub itself will not complete the `--auto` merge until that check is green
+on the PR's current head. Before this branch-protection change, `--auto` was
+not guaranteed to wait on anything meaningful, since no check was required;
+now it is.
+
+**Rationale**: a merge that races a check which hasn't reported yet looks
+identical, in a quick status read, to one that already passed; branch
+protection turns "wait for green" from a convention someone can forget into
+something GitHub itself enforces.
+
+**How to apply**: after opening a PR, find the run with `gh run list
+--branch <branch>` and wait on it with `gh run watch <run-id> --exit-status`
+before merging by hand; or use `gh pr merge --auto --squash`, which blocks on
+the same required check by construction.
 
 ## 7. Rupture-analysis conventions are stated explicitly
 
