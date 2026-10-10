@@ -38,8 +38,9 @@ for s in $(seq 1 "$NSEG"); do
   jid=$(sbatch --parsable -p "$PARTITION" -A "$ACCOUNT" -N 1 -n 1 -c "$CPUS" -t "$WALL" \
           -J "m3_${ARM}_s$s" -o "$ADIR/logs/slurm.o%j" -e "$ADIR/logs/slurm.e%j" \
           ${dep:+--dependency=$dep} ${dep:+--kill-on-invalid-dep=yes} --export="$export_list,SEG=$s" \
-          "$EQGNS/scripts/m3_bs_lr_sweep/arm_segment_gh200.sbatch")
-  jid=${jid%%;*}
+          "$EQGNS/scripts/m3_bs_lr_sweep/arm_segment_gh200.sbatch" | tail -1)
+  jid=${jid%%;*}   # the site's sbatch wrapper prints a banner before the --parsable line
+  [[ "$jid" =~ ^[0-9]+$ ]] || { echo "could not parse a job id from sbatch output: '$jid'"; exit 2; }
   echo "$ARM $s $jid dep=${dep:-none}" | tee -a "$ADIR/submissions.txt"
   prev=$jid
 done

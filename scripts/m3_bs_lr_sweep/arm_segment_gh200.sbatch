@@ -151,15 +151,33 @@ EOF
 seg=$SEG
 run_segment "$seg"
 # ARM=DRY self-test: more segments in the same job, with an injected truncated checkpoint.
+corrupted=""
 while [ "$ARM" = "DRY" ] && [ "$DRY_EXTRA_SEGMENTS" -gt 0 ]; do
   if [ "$DRY_CORRUPT_AFTER_SEG" = "$seg" ]; then
-    newest=$(ls "$MDIR" | sed -n 's/^train_state-\([0-9]*\)\.pt$/\1/p' | sort -n | tail -1)
-    truncate -s 1000 "$MDIR/train_state-$newest.pt"
-    log "$seg" "DRY: truncated train_state-$newest.pt to 1000 bytes (simulated kill during torch.save)"
+    corrupted=$(ls "$MDIR" | sed -n 's/^train_state-\([0-9]*\)\.pt$/\1/p' | sort -n | tail -1)
+    truncate -s 1000 "$MDIR/train_state-$corrupted.pt"
+    log "$seg" "DRY: truncated train_state-$corrupted.pt to 1000 bytes (simulated kill during torch.save)"
   fi
   seg=$((seg + 1)); DRY_EXTRA_SEGMENTS=$((DRY_EXTRA_SEGMENTS - 1))
   run_segment "$seg" || true
 done
 log "$seg" "segment job end"
 [ -f "$ADIR/HALT" ] && exit 1
+if [ "$ARM" = "DRY" ]; then
+  # The self-test passes only if the arm finished AND the injected truncation was detected and
+  # fallen back from: corrupt/ holds the truncated pair and the next segment resumed below it.
+  [ -f "$ADIR/DONE" ] || { log "$seg" "DRY FAIL: no DONE marker"; exit 1; }
+  if [ -n "$corrupted" ]; then
+    [ -f "$MDIR/corrupt/train_state-$corrupted.pt" ] || { log "$seg" "DRY FAIL: truncated pair not moved to corrupt/"; exit 1; }
+    resumed=$(python - "$ADIR/segments.jsonl" "$((DRY_CORRUPT_AFTER_SEG + 1))" <<'EOF'
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+print(next((r["start_step"] for r in rows if r["seg"] == int(sys.argv[2])), "NONE"))
+EOF
+)
+    { [ "$resumed" != "NONE" ] && [ "$resumed" -ge 0 ] && [ "$resumed" -lt "$corrupted" ]; } \
+      || { log "$seg" "DRY FAIL: segment after truncation resumed from '$resumed', expected 0 <= step < $corrupted"; exit 1; }
+    log "$seg" "DRY PASS: truncated step $corrupted detected, resumed from $resumed, arm DONE"
+  fi
+fi
 exit 0
