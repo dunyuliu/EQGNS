@@ -188,3 +188,69 @@ cumulative tool calls across this session's resumes are judged past the
 ~100 cap (this is at least the 4th conductor continuation per prior session-
 log entries, e.g. "conductor #3 continuation checkpoint"). Recording this
 checkpoint and handing off to a fresh conductor rather than continuing.
+
+## Conductor #5 (fresh conductor, continuing the handoff checkpoint above)
+
+Budget read: owner's /autopilot grant is 48h from ~2026-10-10 10:20 CDT to
+~2026-10-12 10:20 CDT; this is a fresh conductor so the ~100-tool-call
+cumulative cap resets (the cap is per-session, not per-campaign). Owner
+approvals are already on the board (PRs #88/#89); no pending owner calls
+this pass.
+
+Verified at start (superseding the stale checkpoint claims):
+- GH200 sweep confirmed healthy via the existing read-only control socket
+  (master pid 3873789, owner's, never a new master): all 12 arm-segment
+  jobs + gate (1063163) + DRY (1063164) present, gate/DRY COMPLETED exit 0,
+  arm segments correctly PENDING on Priority/Dependency. Multi-day job, not
+  touched further this pass.
+- M1-recovery agent `a60441bff209fa669` (not dead, resumable): resumed via
+  SendMessage, not redispatched. It rebased its own stale PR #94
+  (`c9cd523`->`88c915e`) onto current main itself. Conductor's own fresh
+  oracle re-run of `scripts/utils/mirror_augment.py` against real
+  `D1_fixed/dataset/valid.npz` matched its claim exactly (3->6 trajectories,
+  `pos[...,0]` negated, all other fields byte-identical). CI green (run
+  `38076917458`, exit 0), privacy grep clean, standalone new file (no
+  `meshnet`/`gns` touch, rule 10 N/A) -- squash-merged PR #94 -> `44760e0`.
+- This agent is in fact the `m1-arresting-mirror-expansion` row's dispatched
+  worker (same agentId, redispatch note in this log's INCIDENT section
+  confirms it), not a narrower "rebase only" task. It reported back: Phase
+  0b EQdyna arresting scan COMPLETE (22/24 scenarios; no extension needed);
+  the two scenarios matching published test H0/H16 correctly self-excluded
+  from the train pool (confirmed correct, no owner escalation needed --
+  leakage-clean, matches design intent); datasets assembled; A1 seed0
+  training now running on GPU1 (pid 1686142, cwd
+  `/home/utig5/dliu/eq_rupture_gns_data/m1_expanded/`, durable, outside any
+  worktree -- survives a worktree reap, learned from the earlier INCIDENT).
+  Conductor declined its request to also use the now-idle GPU2 (J10 exited):
+  one heavy job of ours at a time stands; queue stays sequential. Agent has
+  its own background waiter on the training queue PID and will not contact
+  again until it exits or needs a decision -- a named unblock event, not an
+  open wait of the conductor's own.
+- `venv/` removal (board item "4a"): J10 (pid 291439) confirmed exited,
+  GPU2 confirmed idle -- but a `/proc/*/maps` scan (the checkpoint's own
+  precaution) found a SECOND live blocker: 5 detached PIDs since Oct 6
+  mapping this repo's `venv/`, cwd under the owner's MT-project oracle-gate
+  worktree (`python3 run_gate_parallel.py`) -- the explicitly do-not-touch
+  MT oracle gate. Not deleted. Board updated; this is a real finding the
+  "4a" reading didn't anticipate, not an excuse to defer indefinitely.
+
+Landings this pass: PR #94 (`44760e0`, mirror_augment.py), PR #96
+(`b840a61`, board record for #94), PR #97 (`a14d88c`, venv/-blocker
+finding). Process note: forgot to `git fetch`/`pull` between the #96 merge
+and branching PR #97, so #97 briefly showed `mergeable: CONFLICTING`
+against a stale local main; resolved by rebase + a manual conflict merge
+(diffed clean afterward: single-line change, no reverted content). Logged
+as a papercut (global log, not reproduced here per confidentiality).
+
+Roster at this checkpoint: 1 live agent, `a60441bff209fa669`
+(dunyu-liu persona), worktree
+`.claude/worktrees/agent-a60441bff209fa669` (branch
+`worktree-agent-a60441bff209fa669`, HEAD `88c915e`), background training
+queue pid 1686142 on GPU1 in a durable cwd outside the worktree. Not
+reaped -- still owns both. Main checkout clean at `a14d88c`, level with
+origin.
+
+Stopping here (not a cap-driven stop -- a natural checkpoint: the one live
+child owns a named unblock event and nothing else is actionable without
+either its next report or the GH200 sweep progressing). Reporting to the
+invoker now.
