@@ -18,22 +18,32 @@ speed magnitude over compare_pair()'s own window (init frame prepended, same con
 gate.metrics() uses for its vs-truth final_slip_rmse), RMSE across nodes, plus the same
 number normalised by the anchor's peak final slip.
 
+Adds ONE validity flag, `diverged` (per trajectory, every side): gate.metrics()'s
+`collapsed` guard is low-variance-only, so a NaN/blown-up rollout would otherwise score
+rt_rmse = 0.0 and pass. A trajectory is diverged if any predicted velocity is non-finite
+or max|v_pred| exceeds DIVERGE_RATIO x max|v_truth| over the trajectory. Diverged rows are
+written (with the flag set) but excluded from every mean this script prints; the
+downstream ranking must exclude them too (filter on `diverged == 0`).
+
 Modes
   score    score an existing directory of rollout_*.pkl files
              --case M3_D3 --arm NAME --pkl-dir DIR [--anchor G=DIR --anchor P=DIR ...] --out CSV
   rollout  roll an arm checkpoint out (deterministic, eager path) into --pkl-dir, then score
              --case M3_D3 --arm NAME --model-dir DIR --step N --cuda K --pkl-dir DIR [--anchor ...] --out CSV
 
-Output CSV (appended, one row per trajectory x side): case, arm, traj, side ('truth' or the
-anchor name), then the union of the metric columns above (blank where a side has no such
-metric). Trajectories in gate.REGRESSION_EXCLUDE_TRAJ are written like any other row and
-flagged in `excluded`; the printed per-case summary gives means with and without them and
-states n. No thresholds, no pass/fail -- the design doc's floors are applied downstream.
+Output CSV: one row per trajectory x side ('truth' or an anchor name) with provenance
+columns (ckpt_step, git_sha, model_path) and the union of the metric columns above (blank
+where a side has no such metric). Rewriting is IDEMPOTENT: rows whose key
+(case, arm, ckpt_step, traj, side) already exists in --out are replaced, never duplicated.
+Trajectories in gate.REGRESSION_EXCLUDE_TRAJ are written like any other row and flagged in
+`excluded`; the printed per-case summary gives means with and without them and states n.
+No thresholds, no pass/fail -- the design doc's floors are applied downstream.
 """
 import argparse
 import csv
 import os
 import pickle
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -41,7 +51,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "tests" / "paper_parity"))
+REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "tests" / "paper_parity"))
 import gate  # noqa: E402
 import measure_vs_published as mvp  # noqa: E402
 
@@ -49,7 +60,25 @@ TRUTH_KEYS = ["mse_vx", "rt_rmse", "missed", "false", "mw_error", "sr_rmse_vx", 
               "final_slip_rmse", "var_ratio", "collapsed"]
 ANCHOR_KEYS = ["delta_rt_rmse_s", "delta_mw", "vx_rmse_norm", "vy_rmse_norm", "missed", "false",
                "final_slip_rmse", "final_slip_rmse_norm", "note"]
-COLUMNS = ["case", "arm", "traj", "side", "excluded"] + sorted(set(TRUTH_KEYS) | set(ANCHOR_KEYS))
+KEY_COLUMNS = ["case", "arm", "ckpt_step", "traj", "side"]
+PROVENANCE_COLUMNS = ["git_sha", "model_path"]
+COLUMNS = KEY_COLUMNS + PROVENANCE_COLUMNS + ["excluded", "diverged", "diverge_ratio"] + sorted(set(TRUTH_KEYS) | set(ANCHOR_KEYS))
+# Slip-rate amplitude ratio beyond which a rollout is called diverged. Truth peaks are O(1-10 m/s)
+# on these test sets; a healthy rollout stays within a small factor of truth, a blown-up one
+# grows by orders of magnitude before (or without) reaching NaN. 10x is deliberately loose: it
+# is a divergence screen, not a quality metric -- quality is what the metrics below measure.
+DIVERGE_RATIO = 10.0
+
+
+def divergence(pkl):
+    """(diverged: bool, ratio: float) -- non-finite anywhere, or max|v_pred| / max|v_truth| > DIVERGE_RATIO."""
+    pred = np.asarray(pkl["predicted_rollout"], dtype=np.float64)
+    truth = np.asarray(pkl["ground_truth_rollout"], dtype=np.float64)
+    finite = bool(np.isfinite(pred).all())
+    peak_truth = float(np.max(np.abs(truth))) if truth.size else 0.0
+    peak_pred = float(np.nanmax(np.abs(pred))) if pred.size else 0.0
+    ratio = (peak_pred / peak_truth) if peak_truth > 0 else float("inf")
+    return (not finite) or (ratio > DIVERGE_RATIO), ratio
 
 
 def final_slip_pair(pkl_a, pkl_b):
@@ -76,23 +105,29 @@ def load_pkls(d):
     return out
 
 
-def score(case, arm, arm_pkls, anchors):
+def score(case, arm, arm_pkls, anchors, ckpt_step="", git_sha="", model_path=""):
     rows = []
+    base = {"case": case, "arm": arm, "ckpt_step": ckpt_step, "git_sha": git_sha, "model_path": model_path}
     for i, pkl in enumerate(arm_pkls):
         excl = (case in gate.REGRESSION_EXCLUDE_CASES) or ((case, i) in gate.REGRESSION_EXCLUDE_TRAJ)
-        m = gate.metrics(pkl)
-        rows.append({"case": case, "arm": arm, "traj": i, "side": "truth", "excluded": int(excl),
-                     **{k: m[k] for k in TRUTH_KEYS}})
+        div, ratio = divergence(pkl)
+        common = {**base, "traj": i, "excluded": int(excl), "diverged": int(div), "diverge_ratio": ratio}
+        try:
+            m = gate.metrics(pkl)
+            rows.append({**common, "side": "truth", **{k: m[k] for k in TRUTH_KEYS}})
+        except Exception as e:  # noqa: BLE001 -- a diverged rollout may break the metric code; keep the row
+            rows.append({**common, "side": "truth", "note": f"metrics failed: {type(e).__name__}"})
         for name, pkls_b in anchors.items():
             if i >= len(pkls_b):
-                rows.append({"case": case, "arm": arm, "traj": i, "side": name, "excluded": int(excl),
-                             "note": f"anchor {name} has only {len(pkls_b)} trajectories"})
+                rows.append({**common, "side": name, "note": f"anchor {name} has only {len(pkls_b)} trajectories"})
                 continue
-            c = mvp.compare_pair(pkl, pkls_b[i])
-            fs, fs_norm = final_slip_pair(pkl, pkls_b[i])
-            rows.append({"case": case, "arm": arm, "traj": i, "side": name, "excluded": int(excl),
-                         **{k: c[k] for k in ANCHOR_KEYS if k in c},
-                         "final_slip_rmse": fs, "final_slip_rmse_norm": fs_norm})
+            try:
+                c = mvp.compare_pair(pkl, pkls_b[i])
+                fs, fs_norm = final_slip_pair(pkl, pkls_b[i])
+                rows.append({**common, "side": name, **{k: c[k] for k in ANCHOR_KEYS if k in c},
+                             "final_slip_rmse": fs, "final_slip_rmse_norm": fs_norm})
+            except Exception as e:  # noqa: BLE001
+                rows.append({**common, "side": name, "note": f"compare failed: {type(e).__name__}"})
     return rows
 
 
@@ -120,8 +155,12 @@ def rollout_arm(case, model_dir, step, cuda, pkl_dir):
 
 def summary(rows):
     lines = []
+    n_div = len({r["traj"] for r in rows if r.get("diverged")})
+    if n_div:
+        lines.append(f"  DIVERGED trajectories (excluded from every mean below): {n_div} -> "
+                     f"{sorted({r['traj'] for r in rows if r.get('diverged')})}")
     for side in sorted({r["side"] for r in rows}, key=lambda s: (s != "truth", s)):
-        sub = [r for r in rows if r["side"] == side]
+        sub = [r for r in rows if r["side"] == side and not r.get("diverged")]
         keys = TRUTH_KEYS if side == "truth" else ANCHOR_KEYS
         for k in keys:
             vals = [(r[k], r["excluded"]) for r in sub if isinstance(r.get(k), (int, float)) and not isinstance(r.get(k), bool)]
@@ -134,6 +173,35 @@ def summary(rows):
     return "\n".join(lines)
 
 
+def write_idempotent(out, rows):
+    """Replace rows with the same (case, arm, ckpt_step, traj, side) key; keep everything else."""
+    def key(r):
+        return tuple(str(r.get(k, "")) for k in KEY_COLUMNS)
+    existing = []
+    if os.path.exists(out):
+        with open(out, newline="") as f:
+            existing = list(csv.DictReader(f))
+    new_keys = {key(r) for r in rows}
+    kept = [r for r in existing if key(r) not in new_keys]
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    tmp = out + ".tmp"
+    with open(tmp, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w.writeheader()
+        for r in kept + rows:
+            w.writerow({k: r.get(k, "") for k in COLUMNS})
+    os.replace(tmp, out)
+    return len(existing) - len(kept)
+
+
+def repo_git_sha():
+    try:
+        return subprocess.run(["git", "-C", str(REPO), "rev-parse", "HEAD"], capture_output=True,
+                              text=True, check=True, timeout=30).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=["score", "rollout"])
@@ -143,9 +211,13 @@ def main():
     ap.add_argument("--model-dir"), ap.add_argument("--step", type=int), ap.add_argument("--cuda")
     ap.add_argument("--anchor", action="append", default=[], metavar="NAME=DIR",
                     help="anchor rollout_*.pkl directory; repeatable (e.g. G=<GH200 det rollout of the published ckpt>, P=<shipped published rollouts>)")
-    ap.add_argument("--out", required=True, help="CSV, appended")
+    ap.add_argument("--git-sha", default=None, help="code revision recorded per row; default: this checkout's HEAD (required if not a git checkout)")
+    ap.add_argument("--out", required=True, help="CSV; rows for the same (case, arm, ckpt_step, traj, side) are replaced, not appended")
     a = ap.parse_args()
 
+    git_sha = a.git_sha or repo_git_sha()
+    if not git_sha:
+        sys.exit("--git-sha required: this checkout has no git HEAD to record")
     anchors = {}
     for spec in a.anchor:
         name, d = spec.split("=", 1)
@@ -159,16 +231,11 @@ def main():
     if not arm_pkls:
         sys.exit(f"no rollout_*.pkl in {a.pkl_dir}")
 
-    rows = score(a.case, a.arm, arm_pkls, anchors)
-    new = not os.path.exists(a.out)
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    with open(a.out, "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
-        if new:
-            w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") for k in COLUMNS})
-    print(f"{a.case} arm={a.arm}: {len(arm_pkls)} trajectories, {len(rows)} rows -> {a.out}")
+    rows = score(a.case, a.arm, arm_pkls, anchors, ckpt_step=("" if a.step is None else a.step),
+                 git_sha=git_sha, model_path=(os.path.abspath(a.model_dir) if a.model_dir else ""))
+    replaced = write_idempotent(a.out, rows)
+    print(f"{a.case} arm={a.arm} step={a.step if a.step is not None else '-'}: {len(arm_pkls)} trajectories, "
+          f"{len(rows)} rows -> {a.out}" + (f" (replaced {replaced} existing rows)" if replaced else ""))
     print(summary(rows))
 
 
