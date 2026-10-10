@@ -56,12 +56,27 @@ def _sha256(path):
 
 
 def _gpu_name():
-    try:
-        out = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                             capture_output=True, text=True, timeout=30)
-        return out.stdout.strip().splitlines()[0]
-    except Exception:  # noqa: BLE001
-        return "unknown"
+    """GPU name from nvidia-smi; raises (never returns a placeholder) so a gate result is
+    always labelled with the hardware it ran on."""
+    out = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                         capture_output=True, text=True, timeout=30)
+    names = out.stdout.strip().splitlines()
+    if out.returncode != 0 or not names or not names[0].strip():
+        raise RuntimeError(f"nvidia-smi gave no GPU name (rc={out.returncode}): {out.stderr.strip()[:200]}")
+    return names[0].strip()
+
+
+def _run_batch(cli, model_dir, batch):
+    """Same 1000-step M1 D1 gate configuration as common.run_training() but at a different
+    --batch_size (the committed gate is fixed at 2); the config copy is unchanged."""
+    import shutil
+    os.makedirs(model_dir, exist_ok=True)
+    shutil.copy(common.TRAINING_GOLDEN_CONFIG, os.path.join(model_dir, "config.json"))
+    t0 = time.time()
+    common.run_cli(cli, ["--mode=train", "--data_path=" + common.D1_DATASET_DIR + "/",
+                         "--model_path=" + model_dir + "/", f"--batch_size={batch}",
+                         f"--ntraining_steps={NSTEPS}", f"--nsave_steps={NSTEPS + 1}"], timeout=3600)
+    return common.parse_loss_log(os.path.join(model_dir, "loss_log.txt")), time.time() - t0
 
 
 def _compare(cur, ref, key):
@@ -90,12 +105,20 @@ def main():
     ap.add_argument("--ref-out", required=True, help="device-native oracle reference JSON to write")
     ap.add_argument("--result-out", required=True, help="comparison result JSON to write")
     ap.add_argument("--device-note", default=None)
-    ap.add_argument("--git-sha", default="unknown")
+    ap.add_argument("--git-sha", required=True, help="40-hex commit of the code under test")
+    ap.add_argument("--batch-sizes", default="2",
+                    help="comma list; 2 = the committed gate's own configuration (always run first); extra "
+                         "batch sizes (e.g. 4,12 for the M3 sweep arms) are run oracle-vs-current the same way "
+                         "and must all pass")
     a = ap.parse_args()
 
     common.require_d1_dataset()
     os.makedirs(a.work, exist_ok=True)
-    gpu = a.device_note or _gpu_name()
+    try:
+        gpu = a.device_note or _gpu_name()
+    except Exception as e:  # noqa: BLE001
+        print(f"GPU NAME LOOKUP FAILED: {e}"); return 2
+    extra_batches = [int(b) for b in a.batch_sizes.split(",") if b.strip() and int(b) != 2]
 
     try:
         ref_rows, t_ref = _run(common.PUBLISHED_CLI, os.path.join(a.work, "oracle"))
@@ -136,6 +159,20 @@ def main():
         result["vs_committed_a100"] = {k: _compare(cur_rows, a100, k) for k in ("train_loss", "valid_loss")}
         result["oracle_native_vs_committed_a100"] = {k: _compare(ref_rows, a100, k) for k in ("train_loss", "valid_loss")}
     passed = result["vs_native"]["train_loss"]["pass"] and result["vs_native"]["valid_loss"]["pass"]
+    result["extra_batches"] = {}
+    for b in extra_batches:
+        try:
+            ref_b, t_rb = _run_batch(common.PUBLISHED_CLI, os.path.join(a.work, f"oracle_b{b}"), b)
+            cur_b, t_cb = _run_batch(common.CURRENT_CLI, os.path.join(a.work, f"current_b{b}"), b)
+        except AssertionError as e:
+            print(f"BATCH {b} RUN FAILED:\n{e}"); return 2
+        ref_bd = {"steps": [r["step"] for r in ref_b], "train_loss": [r["train_loss"] for r in ref_b],
+                  "valid_loss": [r["valid_loss"] for r in ref_b]}
+        cmp_b = {k: _compare(cur_b, ref_bd, k) for k in ("train_loss", "valid_loss")}
+        cmp_b["oracle_wall_s"] = round(t_rb, 1); cmp_b["current_wall_s"] = round(t_cb, 1)
+        result["extra_batches"][str(b)] = cmp_b
+        passed = passed and cmp_b["train_loss"]["pass"] and cmp_b["valid_loss"]["pass"]
+        print(f"batch {b}: oracle {t_rb:.0f}s, current {t_cb:.0f}s")
     result["pass"] = passed
     with open(a.result_out, "w") as f:
         json.dump(result, f, indent=2); f.write("\n")
@@ -150,7 +187,12 @@ def main():
             for s, v in c["per_step"].items():
                 print(f"    step {s:>4}: cur={v['current']:.10g} ref={v['reference']:.10g} "
                       f"abs={v['abs_delta']:.3e} rel={v['rel_delta']:.3e}")
-    print(f"SAME_HW_GATE={'PASS' if passed else 'FAIL'} device={gpu}")
+    for b, cmp_b in result["extra_batches"].items():
+        for k in ("train_loss", "valid_loss"):
+            c = cmp_b[k]
+            print(f"[batch{b}/{k}] pass={c['pass']} differing={c['n_differing']}/{c['n_steps']} "
+                  f"max_abs={c['max_abs_delta']:.3e} max_rel={c['max_rel_delta']:.3e} first_diff={c['first_differing_step']}")
+    print(f"SAME_HW_GATE={'PASS' if passed else 'FAIL'} device={gpu} batches=2{''.join(',' + b for b in result['extra_batches'])}")
     return 0 if passed else 1
 
 

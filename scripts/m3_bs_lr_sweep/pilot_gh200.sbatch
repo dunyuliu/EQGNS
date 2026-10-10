@@ -24,13 +24,14 @@
 #SBATCH -N 1
 #SBATCH -n 1
 
-set -u
+set -uo pipefail
 : "${PILOT:?}" "${EQGNS:?}" "${VENV:?}"
 PILOT_GATE=${PILOT_GATE:-1}
 PILOT_ARMS=${PILOT_ARMS:-"8"}
 ARM_MINUTES=${ARM_MINUTES:-25}
 SEED=${SEED:-1}
-GIT_SHA=${GIT_SHA:-unknown}
+GIT_SHA=${GIT_SHA:?set GIT_SHA to the 40-hex commit of the staged tree}
+GATE_BATCHES=${GATE_BATCHES:-2}   # same_hw_gate.py --batch-sizes (PILOT_GATE=2)
 MODULES=${MODULES:-"gcc/13.2.0 cuda/12.6 python3/3.11.8"}
 LOSS_REPORT_STEP=${LOSS_REPORT_STEP:-250}
 
@@ -81,7 +82,7 @@ elif [ "$PILOT_GATE" = "2" ]; then
   python scripts/m3_bs_lr_sweep/same_hw_gate.py --work "$L/same_hw_gate.$SLURM_JOB_ID" \
       --ref-out "$R/training_gate_reference_gh200.$SLURM_JOB_ID.json" \
       --result-out "$R/same_hw_gate.$SLURM_JOB_ID.json" --git-sha "$GIT_SHA" \
-      > "$R/same_hw_gate.$SLURM_JOB_ID.log" 2>&1
+      --batch-sizes "$GATE_BATCHES" > "$R/same_hw_gate.$SLURM_JOB_ID.log" 2>&1
   rc=$?
   echo "same_hw_gate rc=$rc wall=$(( $(date +%s) - t0 ))s" | tee -a "$R/node_info.$SLURM_JOB_ID.txt"
   tail -40 "$R/same_hw_gate.$SLURM_JOB_ID.log"
@@ -113,6 +114,7 @@ EOF
       --seed="$SEED" --cuda_device_number=0 2>&1 \
     | while IFS= read -r line; do printf '%s %s\n' "$(date +%s.%N)" "$line"; done \
     > "$L/train_$arm.$SLURM_JOB_ID.log"
+  echo "train.py pipeline rc=${PIPESTATUS[0]} (124 = stopped by timeout, as intended)"
   kill $dmon_pid 2>/dev/null; wait $dmon_pid 2>/dev/null
   grep -i -m3 'error\|Traceback\|out of memory' "$L/train_$arm.$SLURM_JOB_ID.log" || true
   python scripts/m3_bs_lr_sweep/throughput.py "$L/train_$arm.$SLURM_JOB_ID.log" --batch "$b" \
