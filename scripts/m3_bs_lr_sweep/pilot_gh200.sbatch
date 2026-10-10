@@ -3,14 +3,16 @@
 # docs/dev/M3_BATCH_LR_SWEEP_DESIGN.md section 5, row "Pilot (mandatory first)".
 #
 # One node, one GPU. Optionally runs `pytest -m training_gate` first (design doc
-# section 3.4: current train() vs the frozen oracle, on this hardware), then one
+# section 3.4: PILOT_GATE=1 current train() vs the committed A100 oracle trace; PILOT_GATE=2
+# same-hardware check: frozen oracle AND current train() both on this GPU via same_hw_gate.py,
+# committed reference untouched), then one
 # fixed-wall-clock from-scratch training run per batch size listed in PILOT_ARMS,
 # each stopped by `timeout` (train.py has no wall-clock stop) and scored by
 # throughput.py. No checkpoint beyond model-0.pt is written (nsave_steps huge).
 #
 # Site specifics (partition, account, paths) are NOT in this file: pass them on the
 # sbatch command line and via --export, e.g.
-#   sbatch -p <partition> -A <allocation> -t 00:55:00 \
+#   sbatch -p <partition> -A <allocation> -t 00:55:00 -c 8 \      # -c explicit: -n 1 alone gave 1 CPU
 #     --export=ALL,PILOT=$SCRATCH/eqgns-m3-sweep-pilot,EQGNS=$SCRATCH/eqgns-m3-sweep-pilot/EQGNS,\
 #     VENV=<venv dir>,MODULES="gcc/13.2.0 cuda/12.6 python3/3.11.8",\
 #     PILOT_GATE=1,PILOT_ARMS="8",ARM_MINUTES=25,SEED=1,GIT_SHA=<sha> \
@@ -68,6 +70,27 @@ if [ "$PILOT_GATE" = "1" ]; then
     exit 1
   fi
   echo "GATE=PASS job=$SLURM_JOB_ID" > "$R/GATE_STATUS.txt"
+elif [ "$PILOT_GATE" = "2" ]; then
+  # Same-hardware gate (design doc 3.4): frozen oracle AND current train.py both on THIS
+  # GPU; the committed A100 reference is reported for context only, never rewritten.
+  echo "=== same-hardware training_gate on this GPU (oracle -> native reference; current vs native) ==="
+  export EQGNS_TRAINING_GATE_DATA_DIR="$PILOT/data/case3.200m.homo.a.Vw/dataset"
+  export EQGNS_TRAINING_GATE_CUDA_DEVICE=0
+  export EQGNS_TRAINING_GATE_REQUIRE_DATA=1
+  t0=$(date +%s)
+  python scripts/m3_bs_lr_sweep/same_hw_gate.py --work "$L/same_hw_gate.$SLURM_JOB_ID" \
+      --ref-out "$R/training_gate_reference_gh200.$SLURM_JOB_ID.json" \
+      --result-out "$R/same_hw_gate.$SLURM_JOB_ID.json" --git-sha "$GIT_SHA" \
+      > "$R/same_hw_gate.$SLURM_JOB_ID.log" 2>&1
+  rc=$?
+  echo "same_hw_gate rc=$rc wall=$(( $(date +%s) - t0 ))s" | tee -a "$R/node_info.$SLURM_JOB_ID.txt"
+  tail -40 "$R/same_hw_gate.$SLURM_JOB_ID.log"
+  if [ $rc -ne 0 ]; then
+    echo "SAME_HW_GATE=FAIL job=$SLURM_JOB_ID rc=$rc" > "$R/GATE_STATUS.txt"
+    echo "same-hardware training_gate FAILED (rc=$rc) -- stopping, no arm is trained (design doc 3.4)."
+    exit 1
+  fi
+  echo "SAME_HW_GATE=PASS job=$SLURM_JOB_ID" > "$R/GATE_STATUS.txt"
 fi
 
 for b in $PILOT_ARMS; do
