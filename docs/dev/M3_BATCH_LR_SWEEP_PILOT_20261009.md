@@ -226,10 +226,23 @@ design at ~290 node-h** (bottom of the design's range); B1/B2 stay
 conditional on the A-arm result (design 3.2) and would bring the total to
 ~440, still under the 700 node-h owner-OK line. Wall-clock: each arm is 2
 chained 48-h segments; with 4 chains concurrent and the observed 2–6 h
-queue waits on `gh`, ~3.5–4 days plus queue. Charge rate: sacct reports
-`AllocTRES billing=72` (cpu-weighted TRES on an exclusive node); the design's
-"1 SU per node-hour" assumption is **still unverified** against the
-allocation's accounting — check before dispatch, as the design asks.
+queue waits on `gh`, ~3.5–4 days plus queue.
+
+**Charge rate — settled: 1 SU per node-hour on `gh`, 15-minute minimum per
+job.** Evidence: the system's published queue table (`gh`, Grace-Hopper, 64
+nodes max, 48 h, "1 SUs" per node-hour; `gg` 0.33) and its formula "SUs
+billed = (# nodes) x max(job duration in wall clock hours, .25) x (charge
+rate per node-hour)"; sacct shows both pilot jobs as `AllocTRES
+billing=72,cpu=72,node=1` (one exclusive node, no `TRESBillingWeights` on
+the partition), i.e. the Slurm billing TRES is the cpu count, and the
+site's SU conversion is per node-hour. Balance at the time of writing
+(`taccinfo`): **EAR26006 6,538 SUs available, expires 2027-03-31**;
+EAR26005 221 SUs. No before/after balance differential was taken (no
+snapshot exists before the pilot started). Cost of the scopes against that
+balance: reduced 4-arm **~290 SU = 4.4 % of the balance**; full 6-arm ~438
+SU (6.7 %); +A2x ~473 SU (7.2 %). The 15-minute minimum also means the
+2 min 19 s gate job 1061645 was billed 0.25 SU, not 0.04 — pilot total
+billed **1.72 SU** (0.25 + 1.47), still under the 2.0 cap.
 
 ## 4. Corrections to the inherited notes, and what a reviewer would attack
 
