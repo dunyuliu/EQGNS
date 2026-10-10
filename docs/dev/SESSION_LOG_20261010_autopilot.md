@@ -139,3 +139,52 @@ Roster at handoff: 1 live agent (dunyu-liu, M1 resume, agentId above). J10
 100% util at last check (10:25) — not yet attributed; not this agent's GPU
 assignment per its brief (local A100s 0/1/3, one at a time), worth checking
 on its next report rather than assumed benign.
+
+## Handoff checkpoint (cumulative tool-call budget, ~100 cap)
+
+Board/main at `01b4177` as of this checkpoint (PR #92, #93 merged this
+session: incident log + agentId correction, M1-recovery roster entry).
+
+Live children: **none** confirmed alive right now. The M1-recovery agent
+(agentId `a60441bff209fa669`, verbatim from its own dispatch result) hit a
+session rate limit (HTTP 429, reset 12:30pm America/Chicago, now past reset)
+mid-task and its turn ended; per the task-notification's own note this is
+resumable (not a terminal stop), its worktree/branch
+(`.claude/worktrees/agent-a60441bff209fa669`, branch
+`worktree-agent-a60441bff209fa669`, 1 commit `c9cd523`) is intact and was
+**not** touched this checkpoint (lesson from the earlier incident applied:
+treated as still-owned by that agent, not reaped or rebased). `ps` shows no
+background process tied to that worktree path right now, so nothing is
+mid-flight that a worktree touch would kill — but the resume-vs-fresh-dispatch
+call belongs to whoever continues this, with full context of what the agent
+was doing (last words: "the sandbox trips on the literal word 'eval' in the
+command line; I'll wrap the call in a script" — mid-workaround for a sandboxed
+`eval_arm.py` invocation).
+
+Pending relay: PR #94 (`scripts/utils/mirror_augment.py`, standalone new
+file, CI green, 3-dot diff vs `origin/main` clean — `+47` insertions only,
+nothing else) is OPEN but stale (base advanced past it via PR #92/#93 docs
+commits) — GitHub refuses the squash merge until it's brought up to date.
+Deliberately NOT force-merged with `--admin` (bypasses the "branch must be
+up to date" protection) and NOT rebased by the conductor (branch belongs to
+a resumable, not-finished agent — same isolation rule that was violated
+earlier). Next conductor: either let the resumed M1 agent rebase/re-push
+itself, or if truly abandoned, re-verify liveness first, then rebase.
+
+GH200 M3 sweep health: NOT reconfirmed this checkpoint — no ssh alias/config
+entry on this box for the TACC login node, and a direct hostname attempt
+failed host-key verification (the dispatching agent must have used a
+different credential/jump path not available to the conductor directly).
+Last known-good status: PR #91 (`775af6c`), jobs 1063163-1063179 dispatched
+2026-10-10, not re-checked since.
+
+Still blocked, unchanged: venv/ removal (J10, pid 291439, GPU2, confirmed
+still running at 13:39); `m2m3-mirror-augmentation` (blocked on M3 sweep's b8
+baseline).
+
+Stopping here per the coordinator's own instruction (relayed message citing
+board commit `01b4177`, verified against actual `git log` before acting):
+cumulative tool calls across this session's resumes are judged past the
+~100 cap (this is at least the 4th conductor continuation per prior session-
+log entries, e.g. "conductor #3 continuation checkpoint"). Recording this
+checkpoint and handing off to a fresh conductor rather than continuing.
