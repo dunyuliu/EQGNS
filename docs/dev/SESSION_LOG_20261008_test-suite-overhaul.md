@@ -936,6 +936,76 @@ gaps` (owned separately, tests/paper_parity — reported, not edited).
 Live roster at this checkpoint: 2 dunyu-liu agents (GH200 pilot; M1/M2M3
 design), both in their own worktrees, no PIDs known locally for the remote
 GH200 jobs (agent-managed). Main checkout clean, `git status --porcelain`
-empty, at whatever SHA the board-update PR below lands on. Ending this turn
-on a blocking wait for both agents' completion notices — do not re-dispatch
-either mission if "absent" on a later check; they are known-live.
+empty, at whatever SHA the board-update PR below lands on.
+
+**Correction (this entry supersedes the line above):** both dunyu-liu
+children died on the session-limit reset without producing any work
+(confirmed by the coordinator's resume message) — the "known-live" line
+above was wrong by the time of the next turn. Re-dispatched both fresh.
+
+## Conductor #3 continuation — 2026-10-09/10, re-dispatch + GH200 pilot GO
+
+- **M1/M2M3 design** (fresh dispatch, dunyu-liu): delivered
+  `docs/dev/M1_ARRESTING_MIRROR_EXPANSION_DESIGN.md` +
+  `docs/dev/M2M3_MIRROR_AUGMENTATION_DESIGN.md`, landed PR #82 (`fb8f3f1`).
+  M1 verdict: train/valid have zero arresting scenarios today (only H0/H16,
+  both in test); ~133 GPU-h recommended matrix; scenario-generation dir
+  found (`eqdyna.scenarios.for.gns/`), EQdyna tree untouched. M2/M3 verdict:
+  zero EQdyna cost, M3-only as a data-efficiency learning curve, ~36 days
+  locally or GH200-shared. Both BLOCKED(owner) on the board (PR #83,
+  `8d728a3`) with their open questions quoted; nothing executed.
+- **Doc-drift fix**: owner moved the local GNS venv to
+  `/home/staff/dliu/software_and_env/venv_gns_cotopaxi/` (root `venv_cotopaxi/`
+  now broken/frozen, kept per PROJECT_RULES's own owner-only-move clause).
+  Dispatched zofia-kaminska to correct PROJECT_RULES.md rule 3 (not a
+  mechanical one-liner — it's a live environment-convention claim with a
+  cross-project "other projects activate by path" rationale). Landed PR #84
+  (`010b27a`).
+- **GH200 M3 sweep pilot**, three rounds on branch `exp/m3-bs-lr-sweep-pilot`:
+  (1) fresh dispatch hit the gate precondition exactly as briefed —
+  `pytest -m training_gate` FAILED on GH200 vs the committed A100 oracle
+  (cross-hardware inference, not yet measurement), 0.04 node-h spent, no
+  arm trained, correctly stopped without improvising. (2) Coordinator
+  relayed owner-adjacent facts (verified independently against the pilot's
+  own committed NOTES before acting, since none cited a board commit):
+  J1/J2 were both still PD on `gh-dev` behind the account's own other-project
+  dev job, `gh` is usable under EAR26006 — resubmitted on `gh`, never
+  touched job 1060815 or opened a new control-master. (3) Scope change
+  (same-hardware gate check + continue the pilot, beyond the "stop and
+  report" original brief) → explicit `TaskStop` (no-op, agent had already
+  self-stopped) + fresh re-dispatch continuing from the pushed branch
+  (`exp/m3-bs-lr-sweep-pilot`, not from main) rather than a drip-fed
+  amendment. Result: same-hardware gate PASSES bit-for-bit (0/1001 steps),
+  confirming the A100-gate failure is cross-hardware float divergence, not
+  a code bug; throughput 76.8/84.7/85.7 samples/s (b4/b8/b12), 1.7-1.9x the
+  design's A100 estimate, above its 60 samples/s GO threshold → reduced
+  4-arm recommended at ~290 node-h. One more live round-trip (resumed the
+  same agent rather than a fresh dispatch) settled the SU charge rate with
+  real evidence (TACC queue-table + `sacct`): 1 SU/node-h, 15-min job floor,
+  EAR26006 balance 6,538 SU — reduced 4-arm is 4.4% of balance. Landed PR #85
+  (`4e8994b`, all-new files, rebased cleanly onto `010b27a` with an identical
+  diff — gate axis 4 satisfied) and the board update PR #86 (`dfb5591`).
+  Two papercuts found and logged to `~/code/papercuts.md`: an inherited
+  "-n 1 gave 1 CPU" misreading (really `OMP_NUM_THREADS=1` carried in via
+  `--export=ALL`) and a `throughput.py --dmon` timezone-parsing bug (logged,
+  not fixed). Remaining gap, recorded on the board, not acted on: the
+  chained-segment driver has no truncated-checkpoint fallback for a run
+  hitting the 48h wall limit mid-arm (design section 3.4 hazard) — this is
+  engineering work, not something to improvise inside a board-update pass;
+  needs its own dispatch once the owner scopes the full run.
+- Worktree hygiene: one stale worktree lock was force-released
+  (`agent-afa8196b28a5aa90d`, lock referenced this session's own long-lived
+  host PID 4102483, started well before this session — not a distinct
+  hung agent; `TaskStop` had already confirmed no live task under that ID).
+  Recorded here per the "force-release is an explicit, recorded act"
+  rule. All worktrees for this stretch checked for stray/ignored content
+  before removal (none found beyond scratch NOTES/`__pycache__`) and reaped.
+- Board rows at end of this stretch: `m1-arresting-mirror-expansion` and
+  `m2m3-mirror-augmentation` BLOCKED(owner), `m3-batchsize-lr-sweep-gh200`
+  BLOCKED(owner) with a GO recommendation and verified cost, HOLD on all
+  arm dispatch until the owner scopes it.
+- Main at `dfb5591`. No live children at the end of this stretch. Ending
+  this turn with nothing in flight — the next actionable step needs the
+  owner's scope call on the M3 sweep (reduced 4-arm, ~290 node-h/SU) and/or
+  the M1/M2M3 design's open questions; do not re-dispatch dunyu-liu for
+  execution on any of these three rows without that.
