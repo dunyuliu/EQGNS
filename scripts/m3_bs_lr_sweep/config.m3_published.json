@@ -1,0 +1,22 @@
+{
+    "__comment": "Published M3 training config (Liu & Becker 2025): verbatim copy of D2_160/models.nmp10.lr3e-5.b8.cotopaxi.r1/config.json, used by scripts/m3_bs_lr_sweep/ as the fixed per-arm config (batch size is a CLI flag, not stored here).",
+    "__path": "Put the config.json file under the model path.",
+    "version": 1.0,
+    "INPUT_SEQUENCE_LENGTH": 1,
+    "noise_std": 0.02,
+    "node_type_embedding_size": 9,
+    "dt": 0.01666666666667,
+    "lr_init": 3e-05,
+    "lr_decay_rate": 0.1,
+    "lr_decay_steps": 20000000.0,
+    "loss_report_step": 1000,
+    "simulator_simulation_dimensions": 2,
+    "simulator_nnode_in": 12,
+    "simulator_nedge_in": 3,
+    "simulator_latent_dim": 128,
+    "simulator_nmessage_passing_steps": 10,
+    "simulator_nmlp_layers": 2,
+    "simulator_mlp_hidden_dim": 128,
+    "simulator_nnode_types": 3,
+    "simulator_node_type_embedding_size": 9
+}
