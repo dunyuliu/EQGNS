@@ -123,3 +123,19 @@ brief): `m2-checkerboard-chaos-exclusion-decision`,
 `paper-parity-gate-schema-and-count-gaps`, `gate-enforcement` (self-hosted
 runner), `gh200-cross-hw-timing` (b)/(c) (owner: "no aarch64 torch upgrade
 for now").
+
+## Redispatched (M1 recovery, fresh agent, new worktree)
+
+- **dunyu-liu** — resume `m1-arresting-mirror-expansion` from the documented
+  state (Phase 0a PASS, mirror-transform verification done, torch confound
+  settled; Phase 0b scan interrupted at 1/24). Briefed to re-point `REPO=` in
+  the durable tool copies, recreate `scripts/utils/mirror_augment.py`
+  verbatim, and — critically — run any detached/background process (scan,
+  training arms) from a durable non-worktree cwd. agentId `a60441bff209fa669`
+  (recorded verbatim from this dispatch's own tool result, not reconstructed).
+
+Roster at handoff: 1 live agent (dunyu-liu, M1 resume, agentId above). J10
+(pid 291439, GPU2) still running — venv/ removal stays blocked. GPU3 also
+100% util at last check (10:25) — not yet attributed; not this agent's GPU
+assignment per its brief (local A100s 0/1/3, one at a time), worth checking
+on its next report rather than assumed benign.
