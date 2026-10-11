@@ -254,3 +254,78 @@ Stopping here (not a cap-driven stop -- a natural checkpoint: the one live
 child owns a named unblock event and nothing else is actionable without
 either its next report or the GH200 sweep progressing). Reporting to the
 invoker now.
+
+## Conductor #6 (fresh conductor, continuing from the #5 handoff checkpoint)
+
+Seeded from `PATHWAY_FORWARD.md` @ `fd29892` + this log's #4/#5 checkpoints.
+Owner's /autopilot grant: 48h from ~2026-10-10 10:20 CDT; fresh conductor so
+the ~100-call cumulative cap resets per session convention.
+
+Verified at start (superseding stale checkpoint claims):
+- M1 queue confirmed healthy via fresh `ps`: `tools/queue.sh` (pid 1686142,
+  bash, started 2026-10-10 13:47, elapsed ~19.4h) and `A1_seed1` training
+  (pid 1086802, GPU0, started 2026-10-11 08:41) both live, matching
+  `queue.log`. Not touched -- self-driving per its own design.
+- M3 GH200 sweep confirmed healthy via the existing read-only control
+  socket (owner's master pid 3873789, never a new master) -- resolved the
+  host from the control-socket filename itself
+  (`<socket>-22`), not guessed, avoiding the
+  #5 checkpoint's dead end. `squeue`: s1 jobs 1063168/1063171/1063174/1063177
+  (A0a/A0b/A1/A2) RUNNING ~17h38m-17h49m; s2/s3 chained segments correctly
+  PENDING on dependency; unrelated `dev.2exp` (job id 1065146, different
+  from the #5 checkpoint's 1064077 -- same name, not touched either way)
+  also present. Not touched, multi-day job.
+- Worktree `.claude/worktrees/agent-a60441bff209fa669` (branch
+  `worktree-agent-a60441bff209fa669`, HEAD `88c915e`) reconfirmed clean
+  (`git status --porcelain` empty, no open PR for its branch) and still owns
+  the live M1 queue/training background processes (durable cwd, outside the
+  worktree, per the INCIDENT-era fix) -- not reaped, no unlanded work found.
+- Could not locate in the repo: the "deferred report-only zofia tidy" item
+  named in this wake's brief -- grepped this log, `PATHWAY_FORWARD.md`, and
+  `PROJECT_RULES.md` for "tidy"/"zofia tidy", no match. Flagging as
+  not-found rather than guessing; needs the brief's source (prior
+  conductor/owner) to point at the actual row or artifact.
+
+Landed this pass:
+- PR #100 (`2fb672c`, squash) -- board-only. Recorded A1_seed0's mechanical
+  eval result on row `m1-arresting-mirror-expansion`, marked **UNAUDITED**,
+  eval JSON paths as proof (`eval/A1_seed0_step{500000,1000000}_test{,_arrest}.json`).
+  Separated the T_pub leakage-clean subset {0,3,4,5} (design section 3.3/4)
+  from the full 6-trajectory output by hand against the design doc -- found
+  and flagged that `tools/eval_arm.py`/`show_eval.py` don't do this
+  labelling themselves (tooling gap, not blocking). Flipped the row's state
+  column from a stale "BLOCKED (owner) -- design landed..." to
+  "RUNNING (dispatched 2026-10-10)", backed by the same fresh `ps` evidence.
+  CI green (run `38146184873`, conclusion `pass`) before merge.
+
+In flight (dispatched this pass, async, not yet returned):
+- **priya-nair**, agentId `a9f42b2244c4ea595`, own worktree (read-only task,
+  touches no git-tracked file) -- independently re-deriving A1_seed0's
+  rf_error numbers from a fresh rollout (checkpoint `model-1000000.pt`) on
+  GPU1 (confirmed idle via `nvidia-smi` before dispatch: 5 MiB/0%; GPU0 is
+  A1_seed1 training, GPU2/3 unrelated jobs, all off-limits to this agent).
+  Briefed to reuse the project's own frozen oracle snapshot
+  (`eq_rupture_gns_data/m1_expanded/repo_snapshot/tests/paper_parity/det_rollout.py`)
+  rather than trusting `eval_arm.py`'s cached JSON arithmetic, write only to
+  its own scratch output dirs, and report PASS/FAIL per trajectory vs the
+  board's claimed numbers plus a bonus determinism check. No PR expected
+  (numeric audit, not a code change) -- its report lands as a board update
+  in a follow-up PR once it returns.
+
+Roster at this checkpoint (copied verbatim from dispatch results, not
+reconstructed): 2 live children --
+  1. `a60441bff209fa669` (dunyu-liu persona, M1 campaign owner) -- background
+     processes pid 1686142 (queue) + pid 1086802 (A1_seed1 training, GPU0),
+     durable cwd, not this session's to touch.
+  2. `a9f42b2244c4ea595` (priya-nair, numeric audit) -- async, own worktree,
+     GPU1, in flight.
+Main checkout clean at `2fb672c` (after PR #100), level with origin.
+
+Stopping here: not cap-driven (well under the ~100-call budget this
+session). Both live children own a named unblock event -- the priya-nair
+audit's own completion notification, and the M1 campaign's self-driving
+queue/training (next decision point is A1_seed1 finishing, ETA
+~2026-10-12 04:00 CDT, or the agent's own next report). The GH200 sweep is
+multi-day and not expected to need a decision this cycle. No other board row
+has actionable, non-owner-blocked work right now. Ending the turn on the
+priya-nair notification rather than a manual poll.
