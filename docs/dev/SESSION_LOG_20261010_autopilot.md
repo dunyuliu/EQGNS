@@ -329,3 +329,47 @@ queue/training (next decision point is A1_seed1 finishing, ETA
 multi-day and not expected to need a decision this cycle. No other board row
 has actionable, non-owner-blocked work right now. Ending the turn on the
 priya-nair notification rather than a manual poll.
+
+### Conductor #6, continued: priya-nair audit returned, landed
+
+priya-nair's audit (agentId `a9f42b2244c4ea595`) completed and returned: all
+10/10 trajectories (T_pub 0-5, T_arr 0-3) PASS vs the board's claimed
+rf_error, full-precision deltas all within float rounding of the 3-decimal
+claim, zero discrepancies; bonus determinism check (`det_rollout.py current
+--mode=rollout` rerun independently) bit-identical. Two non-blocking tooling
+findings in `eval_arm.py` routed, not fixed (re-rupture-counting definition,
+silent-skip-on-existing-output). Landed as PR #102 (`e78d51a`, squash, CI
+run `38146856171` conclusion `pass`) -- clears the UNAUDITED tag on row
+`m1-arresting-mirror-expansion`. Stopped the agent (report read, no further
+work for it).
+
+Checked all other board rows for "whatever P-order gives" next: every P1 row
+is DONE or owner-closed; every other P2/P3 row is either RUNNING
+(`m1-arresting-mirror-expansion` itself, `m3-batchsize-lr-sweep-gh200`, both
+multi-day and self-driving) or explicitly BLOCKED/OPEN pending an owner call
+already recorded on the board (`m2m3-mirror-augmentation` waiting on the M3
+sweep's b8 baseline; `m2-checkerboard-chaos-exclusion-decision`,
+`paper-parity-gate-schema-and-count-gaps` both owner/gate-owner decisions,
+not re-raised; `gh200-cross-hw-timing` (b)/(c) already answered "no aarch64
+upgrade for now"; `isolation-gns-symlink`, `rollout-speedup-further`,
+`noise-py-indexing` all explicit owner-gated long-term items). Nothing
+actionable without either a live job finishing or an owner decision this
+pass.
+
+Reconfirmed before stopping (fresh `ps`): M1 queue (pid 1686142, elapsed
+~19.6h) and A1_seed1 training (pid 1086802, elapsed ~41 min into this
+segment) both still live, untouched. Main checkout clean at `e78d51a`,
+level with origin.
+
+Roster at handoff: **0 live dispatched-agent children** (priya-nair's task
+is complete and was not resumed). Two live background processes, both owned
+by the M1 campaign's resumable agent `a60441bff209fa669`
+(`.claude/worktrees/agent-a60441bff209fa669`, not reaped, no unlanded work)
+-- queue.sh pid 1686142 and A1_seed1 training pid 1086802 -- neither touched,
+both self-driving. Named unblock events for the next conductor: A1_seed1
+finishing (ETA ~2026-10-12 04:00 CDT, then the queue auto-runs A0 baselines),
+or the M1 agent's next report; the M3 GH200 sweep's own multi-day progress
+(jobs 1063163-1063179 via the `vista.tacc.utexas.edu` control socket).
+
+Stopping here (not cap-driven -- well under budget this session; a genuine
+no-actionable-work checkpoint). Reporting to the invoker now.
