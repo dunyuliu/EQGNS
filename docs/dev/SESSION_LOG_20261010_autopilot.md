@@ -268,8 +268,7 @@ Verified at start (superseding stale checkpoint claims):
   `queue.log`. Not touched -- self-driving per its own design.
 - M3 GH200 sweep confirmed healthy via the existing read-only control
   socket (owner's master pid 3873789, never a new master) -- resolved the
-  host from the control-socket filename itself
-  (`cm-eqgns-dunyuliu@vista.tacc.utexas.edu-22`), not guessed, avoiding the
+  host from the control socket's own filename, not guessed, avoiding the
   #5 checkpoint's dead end. `squeue`: s1 jobs 1063168/1063171/1063174/1063177
   (A0a/A0b/A1/A2) RUNNING ~17h38m-17h49m; s2/s3 chained segments correctly
   PENDING on dependency; unrelated `dev.2exp` (job id 1065146, different
@@ -369,7 +368,7 @@ by the M1 campaign's resumable agent `a60441bff209fa669`
 both self-driving. Named unblock events for the next conductor: A1_seed1
 finishing (ETA ~2026-10-12 04:00 CDT, then the queue auto-runs A0 baselines),
 or the M1 agent's next report; the M3 GH200 sweep's own multi-day progress
-(jobs 1063163-1063179 via the `vista.tacc.utexas.edu` control socket).
+(jobs 1063163-1063179 on NVIDIA GH200 (TACC), via the existing control socket).
 
 Stopping here (not cap-driven -- well under budget this session; a genuine
 no-actionable-work checkpoint). Reporting to the invoker now.
