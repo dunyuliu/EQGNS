@@ -65,8 +65,9 @@ ROOT_DIRS_ALLOWED = {
 # Root-level FILE NAME PATTERNS the template allows, for entries whose exact
 # name changes release to release. Exactly one convention lives here today:
 # the CURRENT release note, `release_notes_vX.Y.Z.md` (PROJECT_RULES.md
-# rule 9's docs bullet: ARCHIVED release notes move to docs/dev/; the
-# current one stays at root until the next release archives it there).
+# rule 9's docs bullet: the prior release's note is deleted from the tracked
+# tree, not archived to docs/dev/, which is retired per rule 11; the current
+# one stays at root until the next release deletes it).
 ROOT_FILE_PATTERNS_ALLOWED = (
     re.compile(r"^release_notes_v\d+\.\d+\.\d+\.md$"),
 )

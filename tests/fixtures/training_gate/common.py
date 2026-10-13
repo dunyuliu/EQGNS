@@ -50,7 +50,7 @@ TRAINING_GOLDEN_CONFIG = os.path.join(REPO_ROOT, "tests", "fixtures", "training_
 
 D1_DATASET_DIR = os.environ.get(
     "EQGNS_TRAINING_GATE_DATA_DIR",
-    "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case3.200m.homo.a.Vw/dataset",
+    os.path.join(REPO_ROOT, "data", "gns-sample", "case3.200m.homo.a.Vw", "dataset"),
 )
 
 # Same fixed seed used by both CLI wrappers (tests/fixtures/meshnet/seeded_pipeline_cli.py
