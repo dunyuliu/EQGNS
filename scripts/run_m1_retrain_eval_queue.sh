@@ -7,11 +7,11 @@
 # JSON already exists), safe to re-launch if killed.
 #
 # Usage: setsid nohup bash scripts/run_m1_retrain_eval_queue.sh \
-#          > /home/utig5/dliu/eq_rupture_gns_data/m1_retrain/eval_queue.log 2>&1 < /dev/null & disown
+#          > "$M1_RETRAIN/eval_queue.log" 2>&1 < /dev/null & disown
 set -u
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-M1_RETRAIN=/home/utig5/dliu/eq_rupture_gns_data/m1_retrain
+M1_RETRAIN="${M1_RETRAIN:-$REPO_DIR/../eq_rupture_gns_data/m1_retrain}"
 RESULTS_DIR="$M1_RETRAIN/eval_results"
 STEPS="100000 200000 300000 400000 500000"
 POLL_SECS=90

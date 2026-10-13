@@ -18,6 +18,7 @@ maintenance + new-experiment mode.
 8. One `requirements.txt`, every entry pinned with `==`
 9. A curated root — the template is the target, not the status quo
 10. Paper-parity gate output accompanies every `meshnet/`/`gns/` PR
+11. Dev notes and session logs are never committed to this (public) repo
 
 ---
 
@@ -38,7 +39,7 @@ snapshot indefinitely, independent of later maintenance on `main`.
 **How to apply**: any PR touching `meshnet/train.py` states whether it
 changes `train()`/`validation()` (forbidden without a version bump and
 explicit note) or only `rollout()` (the sanctioned optimization surface, see
-`/home/utig5/dliu/eq_rupture_gns/CLAUDE.md`). Never edit
+`<repo root>/CLAUDE.md`). Never edit
 `meshnet/train.py.published`.
 
 ## 2. Citation surfaces stay intact
@@ -71,7 +72,7 @@ moving/deleting it is itself the owner-only rebuild this rule exists to avoid
 — it is deprecated and broken (`torch` reports `2.6.0+cpu`, no CUDA) and must
 not be used for local runs; it is kept in place, frozen, as a historical
 artifact, not as a live environment. The current local (non-TACC) GNS
-environment is `/home/staff/dliu/software_and_env/venv_gns_cotopaxi/`, built
+environment is `<shared env root>/venv_gns_cotopaxi/`, built
 via the adjacent `build_venv_gns_cotopaxi.sh`, owner-managed, outside this
 repo's tree. This is a no-op for the GH200/TACC sweep work, which uses a
 remote venv on the HPC system. A root symlink `gns-sample -> data/gns-sample`
@@ -87,7 +88,7 @@ depends on.
 must report each as ignored; `python3 scripts/check_root.py` lists any
 untracked root entry outside the template (report-only). Local (non-TACC)
 environment setup or rebuild uses
-`/home/staff/dliu/software_and_env/build_venv_gns_cotopaxi.sh`, not the root
+`<shared env root>/build_venv_gns_cotopaxi.sh`, not the root
 `venv_cotopaxi/`.
 
 ## 4. Experiments are isolated in `scratch/` and `runs/`
@@ -126,7 +127,8 @@ against `argparse`/`click` definitions in the named script.
 
 `origin` = `dunyuliu/EQGNS`, `upstream` = `geoelements/gns`. Commits use a
 short imperative subject line (e.g. "Add rollout caching", not "Added" or
-"Adding"). Author is Dunyu Liu (<email>).
+"Adding"). Author is Dunyu Liu (email omitted from public docs; see the git
+commit author field).
 
 **Rationale**: keeps history skimmable and keeps fork/upstream sync
 unambiguous when pulling from `upstream`.
@@ -210,16 +212,18 @@ where it happens to sit today. The template:
 - `release_notes_vX.Y.Z.md` — exactly one, the CURRENT release's note, by
   filename pattern (`scripts/check_root.py`'s `ROOT_FILE_PATTERNS_ALLOWED`,
   since the exact name changes every release). The next release's first
-  step moves it to `docs/dev/` (where `docs/dev` below says archived
-  release notes live) before writing its own.
+  step deletes the prior note from the tracked tree (git history still has
+  it; see rule 11 — this repo no longer archives notes into `docs/dev/`,
+  which is retired) before writing its own.
 - `.github/workflows/` — CI job definitions only. `.circleci/` is retired
   (one CI provider). The community-health files that used to live under
   `.github/` (`AUTHORS.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`,
   `DCO.md`, `ISSUE_TEMPLATE/`, `pull_request_template.md`) are retired, not
   relocated — an MIT-licensed repo needs neither CONTRIBUTING nor DCO
-- `docs/`, split `docs/user/` (tutorials, how-to, reference, explanation —
-  the published site builds from here) and `docs/dev/` (design notes, logs,
-  archived release notes)
+- `docs/` — `docs/user/` (tutorials, how-to, reference, explanation — the
+  published site builds from here) only. `docs/dev/` is retired (rule 11,
+  2026-10-13 privacy decision): dev notes and session logs are never
+  committed to this public repo.
 - `evals/` — fixtures and golden/reference data for the test gate. A slot
   that fills as earned (rule 1): absent until something is moved or added
   to it is not itself a violation
@@ -263,7 +267,9 @@ Every move below has landed, each in the commit that made its coupled edit:
   root path keep working.
 - `docs/` split into `docs/user/` (tutorials, how-to, reference,
   explanation) and `docs/dev/` (design notes, logs, internal status) —
-  landed, owner anya-petrov.
+  landed, owner anya-petrov. `docs/dev/` subsequently retired entirely
+  2026-10-13 (rule 11, privacy decision): its 9 files deleted from the
+  tracked tree (history retains them on commits before that date).
 
 **Standing exception**: `docs/img/meshnet.gif` is 10.7MB, over the 5MB cap.
 Owner-approved: it stays in git, tracked normally, no Git LFS and no history
@@ -316,3 +322,31 @@ markers (the `PASS`/`FAIL` lines `gate.py` prints) — not for the string
 `meshnet/` or `gns/` with no such output in the body is incomplete and does
 not get approved; raise it as a review comment and wait for an update, don't
 merge-then-follow-up (rule 3).
+
+## 11. Dev notes and session logs are never committed to this (public) repo
+
+Owner decision 2026-10-13: this repo is public and every tracked file in it
+is public, including `docs/dev/` design notes and session logs. A survey
+that day found an HPC allocation id, SU balance, cluster username, scratch
+paths, node names, and local home-directory paths baked into `docs/dev/`
+files, `PATHWAY_FORWARD.md`, `PROJECT_RULES.md`, and several scripts/tests.
+Follow-up (same day, verbatim): "and most docs don't need to exist" /
+"they sholdn't be created in the first place" / "no leak" / "stripe all
+sensitive information out." No agent (human or automated) creates a dev
+note or session-log file anywhere in this repo's tracked tree, ever again.
+A fact that must persist goes in the relevant `PATHWAY_FORWARD.md` row
+(short, redacted); anything that doesn't fit a row goes in the private dev
+repo, outside this tree, or nowhere at all if it isn't needed.
+
+**Rationale**: a design doc or session log accretes exactly the kind of
+operational detail (account ids, hostnames, absolute paths, SU balances)
+that has no reason to be public and every reason to leak by accident; the
+cheapest fix is not writing it here in the first place.
+
+**How to apply**: `git grep -il -e 'EAR2600[0-9]' -e '/scratch/0' -e
+'[a-z]\+@[a-z0-9.-]\+\.\(utexas\|edu\)' -e 'c6[0-9][0-9]-[0-9]' -e
+'/home/utig5' -e '/home/staff'` on the tracked tree should return nothing
+(or only justified, already-reviewed hits); `ls docs/dev/ 2>/dev/null`
+should report "No such file or directory" — its reappearance is itself a
+rule violation, not just its contents. A short per-landing fact goes in a
+`PATHWAY_FORWARD.md` row instead of a new file.

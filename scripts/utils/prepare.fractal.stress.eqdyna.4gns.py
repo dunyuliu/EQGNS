@@ -408,7 +408,7 @@ if case=='case4.200m.fractal.stress':
     # 20250809. Load fractal_stress map inside each sceanrio for initial stress. Code normalized initial shear stress
     # as node feature for GNN.
 
-    dataset_root = "case4.200m.fractal.stress.homo.a.Vw/" # dir on cotopaxi under /home/staff/dliu/eqdyna.scenarios.for.gns
+    dataset_root = "case4.200m.fractal.stress.homo.a.Vw/" # dir under the EQdyna scenario-generation root (owner's own layout)
     max_stress, min_stress = 55e6, 35e6 # Pa
     background_stress = 40e6
         

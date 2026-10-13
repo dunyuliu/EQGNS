@@ -8,8 +8,8 @@
 #SBATCH -n 1                 # Total # of mpi tasks (should be 1 for serial)
 #SBATCH -t 48:00:00          # Run time (hh:mm:ss)
 #SBATCH --mail-type=all      # Send email at begin and end of job
-#SBATCH --mail-user=<email>
-#SBATCH -A <allocation>          # Project/Allocation name (req'd if you have more than 1)
+#SBATCH --mail-user=<user>@<host>
+#SBATCH -A <allocation id 3>          # Project/Allocation name (req'd if you have more than 1)
 
 # fail on error
 set -e

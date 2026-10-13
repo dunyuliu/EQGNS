@@ -14,6 +14,12 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 # Add path for batch_rollout functionality
 sys.path.append(os.path.join(REPO_ROOT, 'meshnet'))
 
+# Dev-convenience path roots for the hardcoded scenario table below (owner's
+# own filesystem layout, not a shipped default): never bake an account/home
+# path into this file directly.
+HOME_ROOT = os.path.expanduser("~")
+STAFF_ROOT = os.environ.get("EQGNS_STAFF_ROOT", HOME_ROOT)
+
 # Define your lists of parameters
 
 case = 5
@@ -21,7 +27,7 @@ use_batch_rollout = False  # Set to True to use batch rollout functionality
 
 if case == 0:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.160scenarios.homo.a.Vw": [
+        f"{REPO_ROOT}/data/gns-sample/case4.200m.multi.stress.160scenarios.homo.a.Vw": [
             "nmp10.lr3e-5.b8.cotopaxi.r1"
             #"nmp10.lr3e-5.b8.n5e-3.cotopaxi.r1",
             #"nmp10.b4.cotopaxi.r1",
@@ -30,7 +36,7 @@ if case == 0:
     }
 elif case == 1:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/runs/20250902_work-test/case4.200m.multi.stress.homo.a.Vw": [
+        f"{REPO_ROOT}/runs/20250902_work-test/case4.200m.multi.stress.homo.a.Vw": [
 #            "r1_lr3e-05_bs2_ns0.005_nmp10_knox",
 #            "r1_lr3e-05_bs2_ns0.005_nmp5_knox",
 #            "r1_lr0.0001_bs2_ns0.005_nmp10_knox",
@@ -44,7 +50,7 @@ elif case == 1:
     }
 elif case == 2:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.fractal.stress.homo.a.Vw": [
+        f"{REPO_ROOT}/data/gns-sample/case4.200m.fractal.stress.homo.a.Vw": [
             "nmp10.cotopaxi.r1",
             "nmp5.cotopaxi.r1",
             "nmp15.cotopaxi.r1"
@@ -53,7 +59,7 @@ elif case == 2:
 
 elif case == 3:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.test": [
+        f"{REPO_ROOT}/data/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.test": [
             "nmp10.cotopaxi.r1",
             "nmp5.cotopaxi.r1",
             "nmp15.cotopaxi.r1"
@@ -61,7 +67,7 @@ elif case == 3:
     }
 elif case == 4:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.others.test": [
+        f"{REPO_ROOT}/data/gns-sample/case4.200m.multi.stress.homo.a.Vw.case3.others.test": [
             "nmp10.cotopaxi.r1",
             "nmp5.cotopaxi.r1",
             "nmp15.cotopaxi.r1"
@@ -69,7 +75,7 @@ elif case == 4:
     }
 elif case == 5:
     model_suffixes = {
-        "/home/utig5/dliu/eq_rupture_gns/data/gns-sample/case4.200m.multi.stress.homo.a.Vw": [
+        f"{REPO_ROOT}/data/gns-sample/case4.200m.multi.stress.homo.a.Vw": [
              "nmp10.cotopaxi"
 #            "nmp10.cotopaxi.r1"
 #            "nmp5.cotopaxi.r1",
@@ -78,7 +84,7 @@ elif case == 5:
     }
 elif case == 6:
     model_suffixes = {
-        "/home/utig5/dliu/dynamo_gns/inbox/from_gns_clone/work.dynamo/D1.Ra.normalizedRa/": [
+        f"{HOME_ROOT}/dynamo_gns/inbox/from_gns_clone/work.dynamo/D1.Ra.normalizedRa/": [
         "r0_lr0.0001_bs2_ns0.02_nmp10_cotopaxi",
         "r0_lr0.0001_bs4_ns0.02_nmp10_cotopaxi",
         "r0_lr3e-05_bs4_ns0.02_nmp10_cotopaxi",
@@ -87,13 +93,13 @@ elif case == 6:
     }
 elif case == 7:
     model_suffixes = {
-        "/home/staff/dliu/eq_rupture_gns/data/gns-sample/case3.200m.homo.a.Vw.others/": [
+        f"{STAFF_ROOT}/eq_rupture_gns/data/gns-sample/case3.200m.homo.a.Vw.others/": [
         "nmp10.cotopaxi"
         ]
     }
 elif case == 8:
     model_suffixes = {
-        "/home/staff/dliu/eq_rupture_gns/data/gns-sample/case3.200m.homo.a.Vw.others/": [
+        f"{STAFF_ROOT}/eq_rupture_gns/data/gns-sample/case3.200m.homo.a.Vw.others/": [
         "nmp10.cotopaxi"
         ]
     }
@@ -107,7 +113,7 @@ gpu_id = 0 # Set GPU id to use
 # Batch rollout parameters (when use_batch_rollout = True)
 batch_size = 4  # Number of .pkl files to process in each batch
 pkl_path = None  # Path to .pkl files for batch processing
-data_path = "/home/utig5/dliu/dynamo_gns/inbox/from_gns_clone/work.dynamo/D1.Ra.normalizedRa/dataset"  # Path to .npz files for batch processing
+data_path = f"{HOME_ROOT}/dynamo_gns/inbox/from_gns_clone/work.dynamo/D1.Ra.normalizedRa/dataset"  # Path to .npz files for batch processing
 output_path = "rollouts/"  # Output path for rollouts
 
 if use_batch_rollout:
