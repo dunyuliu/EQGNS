@@ -10,7 +10,11 @@ Earth* (doi:10.1029/2025JB031981). Start at [README.md](README.md).
   layout): [PROJECT_RULES.md](PROJECT_RULES.md).
 - **Status board** (open work, owners): [PATHWAY_FORWARD.md](PATHWAY_FORWARD.md).
 - **User docs** (data prep, training, rollout, examples): `docs/user/`.
-- **Dev notes** (rollout-speed work, retrain campaigns): `docs/dev/`.
+- **Dev notes and session logs**: never created in this (public) repo —
+  see `PROJECT_RULES.md` rule 11. A short fact that needs to persist goes
+  in the relevant `PATHWAY_FORWARD.md` row, redacted of anything sensitive;
+  a private dev repo is created only if something genuinely can't be
+  folded into the board (none exists as of the 2026-10-13 privacy scrub).
 - **Test gates**: `tests/README.md` for the suite; `tests/paper_parity/`
   for the paper-reproduction gate (owned separately, do not edit casually).
 - **Environment**: `requirements.txt` (pinned, no conda) + `scripts/build_venv.sh`

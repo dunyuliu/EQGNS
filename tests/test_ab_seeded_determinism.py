@@ -18,7 +18,7 @@ comparison ever will). The real use case -- gating an actual refactor -- is
 to point `SECOND_TREE_MESHNET_SRC` (see below) at a candidate worktree's
 `meshnet/` directory instead of copying tree A, e.g.:
 
-    SECOND_TREE_MESHNET_SRC=/home/utig5/dliu/eqgns-worktrees/kai-refactor/meshnet \
+    SECOND_TREE_MESHNET_SRC=<path to candidate worktree>/meshnet \
         pytest tests/test_ab_seeded_determinism.py -q
 
 then the run-B loss sequence would come from the refactored code and any
