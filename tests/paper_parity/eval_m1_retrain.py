@@ -32,8 +32,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gate import HERE, REPO, QUICK_STEPS, metrics, pkls_in, write_quick_npz  # noqa: E402
 
-M1_RETRAIN = Path("/home/utig5/dliu/eq_rupture_gns_data/m1_retrain")
-TEST_NPZ = Path("/home/utig5/dliu/eq_rupture_gns_data/D1_fixed/dataset/test.npz")
+M1_RETRAIN = Path(os.environ.get("EQGNS_M1_RETRAIN_DIR", os.path.join(os.path.expanduser("~"), "eq_rupture_gns_data", "m1_retrain")))
+TEST_NPZ = Path(os.environ.get("EQGNS_TEST_NPZ", os.path.join(os.path.expanduser("~"), "eq_rupture_gns_data", "D1_fixed", "dataset", "test.npz")))
 RESULTS_DIR = M1_RETRAIN / "eval_results"
 # REPO (from gate.py) is THIS checkout's root -- used as the det_rollout.py
 # subprocess cwd so it runs THIS worktree's meshnet/train.py. gns-sample is
@@ -41,7 +41,7 @@ RESULTS_DIR = M1_RETRAIN / "eval_results"
 # checkout, not in git worktrees (same reason gate.py's REGEN_DATA is an
 # absolute, env-overridable path rather than derived from REPO). Override
 # with EQGNS_MAIN_REPO on another machine/checkout.
-MAIN_REPO = Path(os.environ.get("EQGNS_MAIN_REPO", "/home/utig5/dliu/eq_rupture_gns"))
+MAIN_REPO = Path(os.environ.get("EQGNS_MAIN_REPO", os.path.join(os.path.expanduser("~"), "eq_rupture_gns")))
 PUBLISHED_MODEL_DIR = MAIN_REPO / "data" / "gns-sample" / "case3.200m.homo.a.Vw" / "models.nmp10.cotopaxi"
 STEPS = [100000, 200000, 300000, 400000, 500000]
 ARMS = ("fixed", "old")

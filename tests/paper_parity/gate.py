@@ -78,7 +78,7 @@ _prd_spec.loader.exec_module(prd)  # only used for compute_moment(); no __main__
 # the default below is this machine's fixed, absolute location. Override
 # with EQGNS_REGEN_DATA on any other machine. Do NOT point CASES at
 # gns-sample via ad-hoc symlinks -- those don't travel with the repo.
-REGEN_DATA = Path(os.environ.get("EQGNS_REGEN_DATA", "/home/utig5/dliu/eq_rupture_gns_data"))
+REGEN_DATA = Path(os.environ.get("EQGNS_REGEN_DATA", os.path.join(os.path.expanduser("~"), "eq_rupture_gns_data")))
 # case -> directory holding that case's regenerated dataset npz, overriding
 # the normal DATA/ds/"dataset" lookup in run_rollout().
 REGEN_DATASET_DIR = {
