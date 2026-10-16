@@ -1,6 +1,7 @@
 #!/bin/bash
 # One chained segment of one M3 sweep arm on NVIDIA GH200 (TACC).
-# docs/dev/M3_BATCH_LR_SWEEP_DESIGN.md sections 3.2 (arm table) and 3.4 (execution constraints).
+# Design: PATHWAY_FORWARD.md row m3-batchsize-lr-sweep-gh200 (original design doc
+# retired 2026-10-13, privacy scrub).
 #
 # An arm (21.6M samples, ~70-78 h at the pilot's measured 77-86 samples/s) does not fit one
 # 48-h job, so submit_chain_gh200.sh queues NSEG copies of this script with afterany

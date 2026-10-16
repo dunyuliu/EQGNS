@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Same-hardware training gate (docs/dev/M3_BATCH_LR_SWEEP_DESIGN.md section 3.4).
+"""Same-hardware training gate (PATHWAY_FORWARD.md row
+`m3-batchsize-lr-sweep-gh200`; the original design doc was retired
+2026-10-13, privacy scrub).
 
 The committed gate (tests/test_training_gate.py) compares CURRENT meshnet/train.py
 on whatever GPU it runs on against a reference trace made by the frozen oracle

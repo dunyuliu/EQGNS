@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Metrics driver for the M3 batch-size / LR-scaling sweep
-(docs/dev/M3_BATCH_LR_SWEEP_DESIGN.md, section 4.3).
+(PATHWAY_FORWARD.md row `m3-batchsize-lr-sweep-gh200`; the original design
+doc was retired 2026-10-13, privacy scrub).
 
 Reuses, never redefines (PROJECT_RULES.md rule 7):
   tests/paper_parity/gate.py::metrics()            -- arm rollout vs EQdyna test truth
