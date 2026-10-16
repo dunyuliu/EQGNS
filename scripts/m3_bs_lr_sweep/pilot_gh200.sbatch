@@ -1,6 +1,7 @@
 #!/bin/bash
 # Throughput pilot for the M3 batch-size / LR-scaling sweep on NVIDIA GH200 (TACC).
-# docs/dev/M3_BATCH_LR_SWEEP_DESIGN.md section 5, row "Pilot (mandatory first)".
+# Design: PATHWAY_FORWARD.md row m3-batchsize-lr-sweep-gh200, "Pilot (mandatory
+# first)" (original design doc retired 2026-10-13, privacy scrub).
 #
 # One node, one GPU. Optionally runs `pytest -m training_gate` first (design doc
 # section 3.4: PILOT_GATE=1 current train() vs the committed A100 oracle trace; PILOT_GATE=2

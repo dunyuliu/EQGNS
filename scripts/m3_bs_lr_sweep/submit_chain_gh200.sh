@@ -1,6 +1,7 @@
 #!/bin/bash
 # Queue one M3 sweep arm as NSEG chained 48-h segments on NVIDIA GH200 (TACC).
-# docs/dev/M3_BATCH_LR_SWEEP_DESIGN.md sections 3.2 / 3.4; segment logic in arm_segment_gh200.sbatch.
+# Design: PATHWAY_FORWARD.md row m3-batchsize-lr-sweep-gh200 (original design doc
+# retired 2026-10-13, privacy scrub); segment logic in arm_segment_gh200.sbatch.
 #
 # Segments are submitted up front with --dependency=afterany, so a segment that dies hard
 # (node failure, wall kill before `timeout` fires) is still followed by one that resumes from

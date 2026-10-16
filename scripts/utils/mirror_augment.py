@@ -4,15 +4,16 @@
 For every `trajectory<i>` in the input (dict with pos, velocity, node_type,
 node_property, pressure, cells) append `trajectory<N+i>` whose along-strike
 coordinate is reflected, `pos[..., 0] *= -1`; everything else is copied
-unchanged. This is the transform defined in
-docs/dev/M1_ARRESTING_MIRROR_EXPANSION_DESIGN.md section 2.2: the fault is a
-vertical plane with x-symmetric boundaries and friction, so the mirrored
-trajectory is a valid sample with vx'(x) = vx(-x); vy is identically zero in
-every M1/M2/M3 dataset so its sign flip is moot; node_type is x-symmetric
-(asserted for all 19 D1 scenarios, 0 mismatches); cells index the same nodes
-and need no change; per-node node_property travels with its node. Measured
-truth asymmetry of a mirrored label: 2.5e-3 to 4.5e-3 rms/peak slip rate for
-propagating ruptures, 1.3e-2 for the arresting H0/H16 pair (same doc).
+unchanged. This is the transform defined for the fault symmetry argument
+(PATHWAY_FORWARD.md row `m1-arresting-mirror-expansion`; the original design
+doc was retired 2026-10-13, privacy scrub): the fault is a vertical plane
+with x-symmetric boundaries and friction, so the mirrored trajectory is a
+valid sample with vx'(x) = vx(-x); vy is identically zero in every M1/M2/M3
+dataset so its sign flip is moot; node_type is x-symmetric (asserted for all
+19 D1 scenarios, 0 mismatches); cells index the same nodes and need no
+change; per-node node_property travels with its node. Measured truth
+asymmetry of a mirrored label: 2.5e-3 to 4.5e-3 rms/peak slip rate for
+propagating ruptures, 1.3e-2 for the arresting H0/H16 pair (same analysis).
 
 Leakage: mirroring a train split can place the mirror image of a validation
 or test scenario into training (M1 D1: test traj 1, 2 and all 3 valid
