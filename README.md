@@ -74,6 +74,12 @@ breakdown). Run on a venv built fresh from the Installation step above, not
 one copied or moved after creation — a moved venv's compiled
 `torch_cluster`/`torch_sparse` extensions silently fail to load.
 
+The quickstart's tests write only to pytest's own temporary directories —
+nothing persists in the repo. The real pipeline below writes checkpoints to
+`<model_path>/` (e.g. `models.<suffix>/`) and rollout pickles to
+`<output_path>/` (e.g. `rollouts.<suffix>/`), both under the working
+directory you pass on the command line.
+
 For the real EQGNS pipeline (EQdyna data -> train -> rollout -> render) see
 the user guide:
 
