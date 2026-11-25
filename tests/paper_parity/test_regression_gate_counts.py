@@ -42,9 +42,15 @@ def test_count_mismatch_fails(patched, capsys):
     assert "count mismatch" in capsys.readouterr().out
 
 
-def test_count_mismatch_is_not_caught_in_falsify_mode(patched):
-    patched(fast=[], ref=["a"])
+@pytest.mark.parametrize("fast,ref", [([], ["a"]), (["a", "b"], ["a", "b", "c"])],
+                         ids=["fast0_ref1", "fast2_ref3"])
+def test_count_mismatch_is_error_not_caught_or_missed_in_falsify_mode(patched, capsys, fast, ref):
+    patched(fast=fast, ref=ref)
     assert run(falsify=True) is False
+    out = capsys.readouterr().out
+    assert "ERROR" in out, out
+    assert "CAUGHT" not in out, out
+    assert "MISSED" not in out, out
 
 
 def test_matched_counts_with_passing_rows_passes(patched):
