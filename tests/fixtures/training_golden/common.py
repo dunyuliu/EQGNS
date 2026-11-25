@@ -73,15 +73,25 @@ def parse_loss_log(path):
     of {step, train_loss, valid_loss} dicts (same parsing contract as
     tests/test_ab_seeded_determinism.py's _parse_loss_log, duplicated rather
     than imported so this helper has no dependency on another test module)."""
-    rows = []
     with open(path) as f:
-        for line in f:
-            parts = line.split()
+        lines = f.read().splitlines()
+    # One blank line at EOF (after the final newline) is tolerated.
+    # Any other blank or malformed line is an error, never skipped.
+    if lines and lines[-1] == "":
+        lines.pop()
+    rows = []
+    for lineno, line in enumerate(lines, start=1):
+        parts = line.split()
+        try:
+            if len(parts) < 3:
+                raise ValueError(f"expected >= 3 fields, got {len(parts)}")
             rows.append({
                 "step": int(parts[0]),
                 "train_loss": float(parts[1]),
                 "valid_loss": float(parts[2]),
             })
+        except ValueError as e:
+            raise ValueError(f"{path}:{lineno}: malformed loss-log line {line!r}: {e}") from e
     return rows
 
 

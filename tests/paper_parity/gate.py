@@ -594,6 +594,7 @@ def cmd_regression(cases, cuda, precision, falsify=False, scale=1.005, tier="def
     import measure_vs_published as mvp
     extra = (f"--rollout_fast={precision}", "--rollout_batch_size=64")
     all_ok = True
+    errored = False
     for case in cases:
         ref_pkls = mvp.fresh_raw_rollout(case, cuda, code="published")
         if falsify:
@@ -602,7 +603,20 @@ def cmd_regression(cases, cuda, precision, falsify=False, scale=1.005, tier="def
                 fast_pkls = mvp.fresh_raw_rollout(case, cuda, code="current", extra=extra, model_dir=model_dir)
         else:
             fast_pkls = mvp.fresh_raw_rollout(case, cuda, code="current", extra=extra)
+        # rows_for() scores only min(len_a, len_b) trajectories and records a
+        # count mismatch in a note this loop never reads, so a rollout that
+        # wrote zero files would PASS vacuously. Same guard as compare().
+        if len(fast_pkls) != len(ref_pkls):
+            print(f"  [{case}] ERROR: trajectory count mismatch fast={len(fast_pkls)} "
+                  f"ref={len(ref_pkls)} -- case not gated")
+            errored = True
+            continue
         rows = mvp.rows_for(f"regression_{precision}", case, fast_pkls, ref_pkls)
+        if not rows:
+            print(f"  [{case}] ERROR: zero trajectories scored (fast={len(fast_pkls)} "
+                  f"ref={len(ref_pkls)}) -- case not gated")
+            errored = True
+            continue
         case_ok = True
         for r in rows:
             verdict = regression_ok(case, r, tier)
@@ -612,6 +626,10 @@ def cmd_regression(cases, cuda, precision, falsify=False, scale=1.005, tier="def
             if verdict is False:
                 case_ok = False
         all_ok &= case_ok
+    if errored:
+        # An error is neither a PASS nor a CAUGHT planted regression.
+        print("regression gate ERROR: see count/zero-row messages above")
+        return False
     if falsify:
         print(f"planted regression (weights x{scale}, tier={tier}) {'CAUGHT' if not all_ok else 'MISSED'}")
         return not all_ok
