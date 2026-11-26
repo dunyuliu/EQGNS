@@ -52,14 +52,11 @@ fi
 echo 'which python -> venv'
 "$VENV_PY" -c "import sys; print(sys.executable)"
 
-echo 'test_pytorch.py -> random tensor'
-"$VENV_PY" tests/test_pytorch.py
+echo 'smoke: torch + torch_geometric import, random tensor'
+"$VENV_PY" -c "import torch, torch_geometric; print(torch.__version__, torch_geometric.__version__); print(torch.rand(2, 2))"
 
-echo 'test_pytorch_cuda_gpu.py -> True if GPU'
-"$VENV_PY" tests/test_pytorch_cuda_gpu.py
-
-echo 'test_torch_geometric.py -> no return if import successful'
-"$VENV_PY" tests/test_torch_geometric.py
+echo 'smoke: CUDA must be available (this script installs the cu124 build)'
+"$VENV_PY" -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; print('cuda ok:', torch.cuda.get_device_name(0))"
 
 # Clean up
 # --------
